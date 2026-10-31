@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show debugProfileLayoutsEnabled, debugProfilePaintsEnabled;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -15,6 +17,7 @@ import 'package:untitled/screens/login_screen/login_screen.dart';
 const _profileFixture = bool.fromEnvironment('PROFILE_FIXTURE');
 const _profileUsername = String.fromEnvironment('PROFILE_USERNAME');
 const _feedPerformance = bool.fromEnvironment('FEED_PERFORMANCE');
+const _feedComponentTrace = bool.fromEnvironment('FEED_COMPONENT_TRACE');
 const _profileTimeout = Duration(seconds: 30);
 const _feedTimeout = Duration(seconds: 45);
 const _legacyFrameBudgetMs = 16.67;
@@ -183,12 +186,18 @@ Future<void> _runFeedPerformance(
     expect(feedList, findsWidgets);
     final scrollable = feedList.first;
 
+    _setComponentTraceEnabled(_feedComponentTrace);
     var phaseStart = frameTimings.length;
-    for (var i = 0; i < 4; i++) {
-      await tester.timedDrag(
-          scrollable, const Offset(0, -520), const Duration(milliseconds: 350));
-      await tester.pump(const Duration(milliseconds: 120));
-    }
+    await binding.traceAction(
+      () async {
+        for (var i = 0; i < 4; i++) {
+          await tester.timedDrag(scrollable, const Offset(0, -520),
+              const Duration(milliseconds: 350));
+          await tester.pump(const Duration(milliseconds: 120));
+        }
+      },
+      reportKey: 'feedScrollTimeline',
+    );
     await tester.pump(const Duration(milliseconds: 300));
     final scrollFrames = _summarizeFrames(frameTimings.skip(phaseStart));
 
@@ -196,12 +205,18 @@ Future<void> _runFeedPerformance(
     final tabBarView =
         find.descendant(of: feed, matching: find.byType(TabBarView));
     expect(tabBarView, findsOneWidget);
-    for (var i = 0; i < 4; i++) {
-      await tester.timedDrag(tabBarView, Offset(i.isEven ? -500 : 500, 0),
-          const Duration(milliseconds: 350));
-      await tester.pump(const Duration(milliseconds: 450));
-    }
+    await binding.traceAction(
+      () async {
+        for (var i = 0; i < 4; i++) {
+          await tester.timedDrag(tabBarView, Offset(i.isEven ? -500 : 500, 0),
+              const Duration(milliseconds: 350));
+          await tester.pump(const Duration(milliseconds: 450));
+        }
+      },
+      reportKey: 'feedTabSwitchTimeline',
+    );
     final tabSwitchFrames = _summarizeFrames(frameTimings.skip(phaseStart));
+    _setComponentTraceEnabled(false);
 
     final report = {
       'state': 'measured',
@@ -215,8 +230,15 @@ Future<void> _runFeedPerformance(
     _addReport(binding, 'feedPerformance', report);
     expect(tester.takeException(), isNull);
   } finally {
+    _setComponentTraceEnabled(false);
     SchedulerBinding.instance.removeTimingsCallback(collectTimings);
   }
+}
+
+void _setComponentTraceEnabled(bool enabled) {
+  debugProfileBuildsEnabledUserWidgets = enabled;
+  debugProfileLayoutsEnabled = enabled;
+  debugProfilePaintsEnabled = enabled;
 }
 
 Map<String, Object> _summarizeFrames(Iterable<FrameTiming> timings) {

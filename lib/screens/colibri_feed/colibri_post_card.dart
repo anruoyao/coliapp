@@ -455,7 +455,10 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
           if (image.length == 1)
             ColibriSensitiveMedia(
               sensitive: post.isSensitive,
-              child: _AdaptivePostImage(url: image[0].sourceUrl),
+              child: _AdaptivePostImage(
+                url: image[0].sourceUrl,
+                resizeToDisplayBounds: widget.resizeMediaToDisplayBounds,
+              ),
             )
           else
             ColibriSensitiveMedia(
@@ -686,8 +689,12 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
 /// 并显示「查看长图」角标，防止超长图刷屏。
 class _AdaptivePostImage extends StatefulWidget {
   final String url;
+  final bool resizeToDisplayBounds;
 
-  const _AdaptivePostImage({required this.url});
+  const _AdaptivePostImage({
+    required this.url,
+    this.resizeToDisplayBounds = false,
+  });
 
   @override
   State<_AdaptivePostImage> createState() => _AdaptivePostImageState();
@@ -695,14 +702,52 @@ class _AdaptivePostImage extends StatefulWidget {
 
 class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   double? _aspect; // 宽/高
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
 
   @override
-  void initState() {
-    super.initState();
-    // 从图片流解析内在宽高比（cacheKey 与 MyCachedImage 保持一致，命中内存缓存不重复下载）
-    final provider =
-        CachedNetworkImageProvider(widget.url, cacheKey: widget.url);
-    final stream = provider.resolve(const ImageConfiguration());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveAspect();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdaptivePostImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url ||
+        oldWidget.resizeToDisplayBounds != widget.resizeToDisplayBounds) {
+      _aspect = null;
+      _resolveAspect();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeImageListener();
+    super.dispose();
+  }
+
+  void _removeImageListener() {
+    final stream = _stream;
+    final listener = _listener;
+    if (stream != null && listener != null) stream.removeListener(listener);
+    _stream = null;
+    _listener = null;
+  }
+
+  void _resolveAspect() {
+    _removeImageListener();
+    final logicalWidth = MediaQuery.sizeOf(context).width - 32;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = widget.resizeToDisplayBounds && logicalWidth > 0
+        ? (logicalWidth * pixelRatio).ceil()
+        : null;
+    final provider = ResizeImage.resizeIfNeeded(
+      cacheWidth,
+      null,
+      CachedNetworkImageProvider(widget.url, cacheKey: widget.url),
+    );
+    final stream = provider.resolve(createLocalImageConfiguration(context));
     late final ImageStreamListener listener;
     listener = ImageStreamListener((info, _) {
       final w = info.image.width;
@@ -711,7 +756,13 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
         setState(() => _aspect = w / h);
       }
       stream.removeListener(listener);
+      if (identical(_stream, stream)) {
+        _stream = null;
+        _listener = null;
+      }
     });
+    _stream = stream;
+    _listener = listener;
     stream.addListener(listener);
   }
 
@@ -729,7 +780,8 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
               imageUrl: widget.url,
               width: double.infinity,
               height: 220,
-              cornerRadius: 12),
+              cornerRadius: 12,
+              resizeToDisplayBounds: widget.resizeToDisplayBounds),
         ),
       );
     }
@@ -756,7 +808,8 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
                   imageUrl: widget.url,
                   width: double.infinity,
                   height: height,
-                  cornerRadius: 12),
+                  cornerRadius: 12,
+                  resizeToDisplayBounds: widget.resizeToDisplayBounds),
             ),
           ),
           if (capped)
