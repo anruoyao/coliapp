@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 debug 构建生效：允许抓包工具的用户 CA 证书解密 HTTPS 流量 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 系统证书 -->
+            <certificates src="system" />
+            <!-- 用户安装的证书（抓包工具） -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

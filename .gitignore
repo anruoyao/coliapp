@@ -1,0 +1,43 @@
+# Flutter and Dart generated files
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android local and generated files
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/.cxx/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# iOS generated and local files
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/xcuserdata/
+ios/chatter/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+__MACOSX/
+
+# Build reports, logs, and symbolication output
+*.log
+app.*.symbols
+app.*.map.json
+
+# Signing material
+**/*.keystore
+**/*.jks

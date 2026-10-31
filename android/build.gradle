@@ -1,0 +1,79 @@
+//buildscript {
+//    ext.kotlin_version = '1.9.20'
+//    repositories {
+//        google()
+//        mavenCentral()
+//    }
+//
+//    dependencies {
+//        classpath 'com.android.tools.build:gradle:8.3.1'
+//        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+//        classpath 'com.google.gms:google-services:4.4.1'
+//    }
+//}
+
+allprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.deprecation = true
+    }
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        google()
+        // 注意：不要加 mavenCentral() —— 本机 IP 已被 Maven Central 封禁，会返回 403。
+        // 其内容由上面的 aliyun/repository/central 完整镜像。
+    }
+}
+
+rootProject.buildDir = '../build'
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                if (namespace == null) {
+                    namespace project.group
+                }
+            }
+        }
+    }
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    afterEvaluate({ project ->
+        if (project.getPlugins().hasPlugin('android') ||
+                project.getPlugins().hasPlugin('android-library')) {
+            project.configure(project.android) {
+                packagingOptions {
+                    pickFirst 'lib/x86/libc++_shared.so'
+                    pickFirst 'lib/x86_64/libc++_shared.so'
+                    pickFirst 'lib/armeabi-v7a/libc++_shared.so'
+                    pickFirst 'lib/arm64-v8a/libc++_shared.so'
+                }
+            }
+        }
+    })
+}
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                compileSdkVersion 36
+                // 统一 NDK 版本：部分插件（如 :fvp）未指定 ndkVersion，会回退到某个
+                // 默认版本并触发下载。本机只完整安装了 28.2.13676358，这里统一指定，
+                // 既避免重复下载 ~1GB，也绕开残缺的 ndk/27.0.12077973 目录。
+                ndkVersion "28.2.13676358"
+                if (project.android.hasProperty("namespace") == false) {
+                    namespace project.group.toString()
+                }
+            }
+        }
+    }
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

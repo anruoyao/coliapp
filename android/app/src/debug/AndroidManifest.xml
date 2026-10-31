@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The INTERNET permission is required for development. Specifically,
+         the Flutter tool needs it to communicate with the running application
+         to allow setting breakpoints, to provide hot reload, etc.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 信任用户安装的 CA 证书（如抓包工具的证书），方便 debug 包抓包调试 -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        />
+</manifest>

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "937154847059",
+    "project_id": "mishe-c586c",
+    "storage_bucket": "mishe-c586c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:937154847059:android:4f0502ffa8a0c26dd001a6",
+        "android_client_info": {
+          "package_name": "com.mishe.chatter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "937154847059-opb09qhndrn1rej2qic6usdfn0kbh8q8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mishe.chatter",
+            "certificate_hash": "bbbb2ecfc39f1e5a18cac5c87d35a2ce00bfedc7"
+          }
+        },
+        {
+          "client_id": "937154847059-9ggnsjdhohjtq9gqsg96hom033pu4k6h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKTkYqALSkhPfG4prDnx_ZVNwvRVcOR2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "937154847059-9ggnsjdhohjtq9gqsg96hom033pu4k6h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
