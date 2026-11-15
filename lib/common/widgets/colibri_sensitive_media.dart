@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 敏感内容媒体遮罩（对齐网页端 SensitiveContentAlert）。
@@ -73,8 +75,8 @@ class _SensitiveOverlay extends StatelessWidget {
                   color: Colors.white, size: 38),
             ),
             const SizedBox(height: 10),
-            const Text(
-              '敏感内容！',
+            Text(
+              LKeys.commonSensitiveContent.tr,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 15.5,
@@ -82,8 +84,8 @@ class _SensitiveOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              '此帖子可能包含敏感内容。',
+            Text(
+              LKeys.commonSensitiveContentDesc.tr,
               style: TextStyle(color: Colors.white, fontSize: 12.5),
             ),
             const SizedBox(height: 14),
@@ -93,8 +95,8 @@ class _SensitiveOverlay extends StatelessWidget {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Text(
-                '点击查看',
+              child: Text(
+                LKeys.commonTapToView.tr,
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,

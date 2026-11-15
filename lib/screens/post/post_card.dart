@@ -357,35 +357,33 @@ class PostMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = <LiquidGlassMenuItem>[
+    final items = <MenuAction>[
       if (SessionManager.shared.getUserID() == controller.post.userId)
-        LiquidGlassMenuItem(
-          label: LKeys.seeWhoLikedPost.tr,
-          onTap: controller.showWhoLikedThePost,
+        MenuAction(
+          title: LKeys.seeWhoLikedPost.tr,
+          callback: controller.showWhoLikedThePost,
         ),
-      LiquidGlassMenuItem(
-        label: controller.post.userId == SessionManager.shared.getUserID()
+      MenuAction(
+        title: controller.post.userId == SessionManager.shared.getUserID()
             ? LKeys.delete.tr
             : LKeys.report.tr,
-        onTap: controller.deleteOrReport,
+        callback: controller.deleteOrReport,
       ),
       if (SessionManager.shared.getUserID() != controller.post.userId &&
           SessionManager.shared.getUser()?.isModerator == 1)
-        LiquidGlassMenuItem(
-          label: LKeys.delete.tr,
-          onTap: controller.deletePosyByModerator,
+        MenuAction(
+          title: LKeys.delete.tr,
+          callback: controller.deletePosyByModerator,
         ),
-      LiquidGlassMenuItem(
-        label: LKeys.share.tr,
-        onTap: controller.sharePost,
+      MenuAction(
+        title: LKeys.share.tr,
+        callback: controller.sharePost,
       ),
     ];
-    return LiquidGlassMenu(
-      trigger: Icon(
-        Icons.more_horiz,
-        color: isForVideo ? cLightIcon : cLightText,
-      ),
-      items: items,
+    return Menu(
+      isFromPost: true,
+      isForVideo: isForVideo,
+      children: items,
     );
   }
 }

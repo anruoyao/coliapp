@@ -5,6 +5,7 @@ import 'package:untitled/common/managers/guest_session.dart';
 import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_authorship_screen.dart';
 import 'package:untitled/screens/colibri_settings/colibri_credentials_screen.dart';
 import 'package:untitled/screens/colibri_settings/colibri_language_screen.dart';
@@ -45,81 +46,82 @@ class ColibriSettingsScreen extends StatelessWidget {
         backgroundColor: cBG,
         surfaceTintColor: cBG,
         elevation: 0,
-        title: const Text('设置',
-            style: TextStyle(
+        title: Text(LKeys.settingsTitle.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          const ColibriSectionLabel('账号'),
+          ColibriSectionLabel(LKeys.settingsSectionAccount.tr),
           _SettingsCard(children: [
             _SettingsRow(
                 Icons.badge_outlined,
-                '作者身份',
+                LKeys.settingsAuthorship.tr,
                 () => openColibriSettingPage(
                     context, const ColibriAuthorshipScreen())),
             _SettingsRow(
                 Icons.lock_person_outlined,
-                '账号凭证',
+                LKeys.settingsCredentials.tr,
                 () => openColibriSettingPage(
                     context, const ColibriCredentialsScreen())),
           ]),
-          const ColibriSectionLabel('通知与隐私'),
+          ColibriSectionLabel(LKeys.settingsSectionNotificationsPrivacy.tr),
           _SettingsCard(children: [
             _SettingsRow(
                 Icons.notifications_none_rounded,
-                '通知',
+                LKeys.commonNotifications.tr,
                 () => openColibriSettingPage(
                     context, const ColibriSettingsNotificationsScreen())),
             _SettingsRow(
                 Icons.visibility_outlined,
-                '账号隐私',
+                LKeys.settingsAccountPrivacy.tr,
                 () => openColibriSettingPage(
                     context, const ColibriPrivacyScreen())),
           ]),
-          const ColibriSectionLabel('通用'),
+          ColibriSectionLabel(LKeys.settingsSectionGeneral.tr),
           _SettingsCard(children: [
             _SettingsRow(
                 Icons.language_rounded,
-                '语言',
+                LKeys.settingsLanguage.tr,
                 () => openColibriSettingPage(
                     context, const ColibriLanguageScreen())),
             _SettingsRow(
                 Icons.link_rounded,
-                '社交媒体',
+                LKeys.settingsSocialMedia.tr,
                 () => openColibriSettingPage(
                     context, const ColibriSocialMediaScreen())),
             _SettingsRow(
                 Icons.verified_user_outlined,
-                '账号认证',
+                LKeys.settingsVerification.tr,
                 () => openColibriSettingPage(
                     context, const ColibriVerificationScreen())),
           ]),
-          const ColibriSectionLabel('其他设置'),
+          ColibriSectionLabel(LKeys.settingsSectionOther.tr),
           _SettingsCard(children: [
             Obx(() => _SettingsSwitchRow(
                   icon: Icons.vibration_rounded,
-                  label: '振动反馈',
-                  subtitle: '点赞、收藏、关注、发布、聊天及页面切换时振动',
+                  label: LKeys.settingsVibrationFeedback.tr,
+                  subtitle: LKeys.settingsVibrationFeedbackDescription.tr,
                   value: HapticManager.shared.enabled.value,
                   onChanged: (v) => HapticManager.shared.setEnabled(v),
                 )),
           ]),
-          const ColibriSectionLabel('账号管理'),
+          ColibriSectionLabel(LKeys.settingsSectionAccountManagement.tr),
           _SettingsCard(children: [
             _SettingsRow(
                 Icons.block_rounded,
-                '黑名单',
+                LKeys.settingsBlockList.tr,
                 () => openColibriSettingPage(
                     context, const ColibriBlockListScreen())),
             _SettingsRow(
                 Icons.notifications_off_outlined,
-                '静音列表',
+                LKeys.settingsMuteList.tr,
                 () => openColibriSettingPage(
                     context, const ColibriBlockListScreen(isMutedList: true))),
-            _SettingsRow(Icons.logout_rounded, '退出登录', _logout, danger: true),
+            _SettingsRow(Icons.logout_rounded, LKeys.settingsLogOut.tr, _logout,
+                danger: true),
           ]),
         ],
       ),
@@ -296,15 +298,12 @@ class ColibriSettingToggleRow extends StatelessWidget {
 
 /// 设置页通用「保存」按钮。
 class ColibriSettingsSaveButton extends StatelessWidget {
-  final String text;
+  final String? text;
   final bool loading;
   final VoidCallback onTap;
 
   const ColibriSettingsSaveButton(
-      {super.key,
-      required this.onTap,
-      this.text = '保存更改',
-      this.loading = false});
+      {super.key, required this.onTap, this.text, this.loading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -321,13 +320,13 @@ class ColibriSettingsSaveButton extends StatelessWidget {
             ? const SizedBox(
                 width: 22,
                 height: 22,
-                child:
-                    CircularProgressIndicator(strokeWidth: 2.4, color: cBlack))
-            : Text(text,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: Colors.white))
+            : Text(text ?? LKeys.settingsSaveChanges.tr,
                 style: const TextStyle(
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
-                    color: cBlack)),
+                    color: Colors.white)),
       ),
     );
   }

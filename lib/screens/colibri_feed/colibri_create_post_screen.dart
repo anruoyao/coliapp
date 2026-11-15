@@ -13,6 +13,8 @@ import 'package:untitled/common/managers/upload_limits_service.dart';
 import 'package:untitled/common/widgets/colibri_markdown_text.dart';
 import 'package:untitled/common/widgets/colibri_mentions.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
+import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 单个待上传媒体的状态。
@@ -44,6 +46,7 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final TextEditingController _content = TextEditingController();
+  final FocusNode _contentFocus = FocusNode();
 
   /// 多图（后端草稿制逐张上传，上限见 config/post.php max_images_count = 10）
   static const int _maxImages = 10;
@@ -70,6 +73,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   bool _isAiGenerated = false;
 
   bool _publishing = false;
+  bool _mediaPickerActive = false;
   bool _hasContent = false;
   String? _uploadLabel; // 发布按钮 loading 文案（「图片 2/5」/「上传 46%」）
 
@@ -91,6 +95,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void dispose() {
     _content.dispose();
+    _contentFocus.dispose();
     for (final c in _pollOptions) {
       c.dispose();
     }
@@ -118,54 +123,65 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   /// 选图（可多选，追加到现有图片，与视频/音频/文件互斥）。
   Future<void> _pickImage() async {
+    if (_publishing || _mediaPickerActive) return;
     final remaining = _maxImages - _images.length;
     if (remaining <= 0) {
-      showColibriToast('图片已达上限',
-          message: '一条帖子最多 $_maxImages 张图片',
+      showColibriToast(LKeys.postImageLimitReached.tr,
+          message: LKeys.postMaxImages.trParams({'p1': '$_maxImages'}),
           backgroundColor: cRed,
           colorText: Colors.white);
       return;
     }
-    final files = await ImagePicker().pickMultiImage(imageQuality: 80);
-    if (files.isEmpty) return;
-    final picked =
-        files.take(remaining).map((f) => _ImageItem(f.path)).toList();
+    setState(() => _mediaPickerActive = true);
+    try {
+      final files = await ImagePicker().pickMultiImage(imageQuality: 80);
+      if (!mounted || files.isEmpty || _publishing) return;
+      final picked =
+          files.take(remaining).map((f) => _ImageItem(f.path)).toList();
 
-    // 本地预检测：过滤超出后台配置限制的图片并提示（避免无谓上传）
-    final valid = <_ImageItem>[];
-    String? oversizedMessage;
-    for (final item in picked) {
-      final msg =
-          await UploadLimitsService.shared.check(item.fileSize, 'image');
-      if (msg != null) {
-        oversizedMessage ??= msg;
-      } else {
-        valid.add(item);
+      // 本地预检测：过滤超出后台配置限制的图片并提示（避免无谓上传）
+      final valid = <_ImageItem>[];
+      String? oversizedMessage;
+      for (final item in picked) {
+        final msg =
+            await UploadLimitsService.shared.check(item.fileSize, 'image');
+        if (!mounted || _publishing) return;
+        if (msg != null) {
+          oversizedMessage ??= msg;
+        } else {
+          valid.add(item);
+        }
       }
-    }
 
-    setState(() {
-      _images.addAll(valid);
-      // 图片与其它媒体类型互斥
-      _clearMediaState();
-    });
-    if (oversizedMessage != null) {
-      showColibriToast('图片过大',
-          message: oversizedMessage,
-          backgroundColor: cRed,
-          colorText: Colors.white);
+      setState(() {
+        _images.addAll(valid);
+        // 图片与其它媒体类型互斥
+        _clearMediaState();
+      });
+      if (oversizedMessage != null) {
+        showColibriToast(LKeys.commonImageTooLarge.tr,
+            message: oversizedMessage,
+            backgroundColor: cRed,
+            colorText: Colors.white);
+      }
+      if (files.length > picked.length) {
+        showColibriToast(LKeys.postImageLimitReached.tr,
+            message: LKeys.postMaxImagesSelectedFirst.trParams({
+              'p1': '$_maxImages',
+              'p2': '$_maxImages',
+            }),
+            backgroundColor: cRed,
+            colorText: Colors.white);
+      }
+      _syncHasContent();
+    } finally {
+      if (mounted) setState(() => _mediaPickerActive = false);
     }
-    if (files.length > picked.length) {
-      showColibriToast('图片已达上限',
-          message: '一条帖子最多 $_maxImages 张图片，已选取前 $_maxImages 张',
-          backgroundColor: cRed,
-          colorText: Colors.white);
-    }
-    _syncHasContent();
   }
 
   /// 移除第 index 张已选图片。已上传的先从服务器草稿撤回（media/delete）再移除本地。
   Future<void> _removeImage(int index) async {
+    if (_publishing) return;
     final item = _images[index];
     if (item.status == _UploadStatus.uploading) return;
     if (item.uploaded) {
@@ -174,8 +190,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         try {
           await ColibriTimelineService.shared.deleteMedia(item.serverMediaId!);
         } catch (e) {
-          showColibriToast('移除失败',
-              message: '未能从草稿撤回该图片：$e',
+          showColibriToast(LKeys.postRemoveFailed.tr,
+              message: LKeys.postDraftImageRemoveFailed.trParams({'p1': '$e'}),
               backgroundColor: cRed,
               colorText: Colors.white);
           return;
@@ -212,102 +228,138 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _pickVideo() async {
-    final file = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    if (file == null) return;
+    if (_publishing || _mediaPickerActive) return;
+    setState(() => _mediaPickerActive = true);
+    try {
+      final file = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (!mounted || file == null || _publishing) return;
 
-    // 本地预检测：超出后台配置的视频大小限制时立即提示
-    final size = File(file.path).lengthSync();
-    final msg = await UploadLimitsService.shared.check(size, 'video');
-    if (msg != null) {
-      showColibriToast('视频过大',
-          message: msg, backgroundColor: cRed, colorText: Colors.white);
-      return;
+      // 本地预检测：超出后台配置的视频大小限制时立即提示
+      final size = File(file.path).lengthSync();
+      final msg = await UploadLimitsService.shared.check(size, 'video');
+      if (!mounted || _publishing) return;
+      if (msg != null) {
+        showColibriToast(LKeys.postVideoTooLarge.tr,
+            message: msg, backgroundColor: cRed, colorText: Colors.white);
+        return;
+      }
+
+      await _revokeUploadedImages();
+      if (!mounted || _publishing) return;
+      setState(() {
+        _images.clear();
+        _clearMediaState();
+        _mediaPath = file.path;
+        _mediaName = file.name;
+        _mediaType = 'video';
+        _mediaFileSize = size;
+      });
+      _syncHasContent();
+    } finally {
+      if (mounted) setState(() => _mediaPickerActive = false);
     }
-
-    await _revokeUploadedImages();
-    setState(() {
-      _images.clear();
-      _clearMediaState();
-      _mediaPath = file.path;
-      _mediaName = file.name;
-      _mediaType = 'video';
-      _mediaFileSize = size;
-    });
-    _syncHasContent();
   }
 
   Future<void> _pickAudio() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const [
-        'mp3',
-        'wav',
-        'm4a',
-        'ogg',
-        'aac',
-        'opus',
-        'webm',
-        'amr'
-      ],
-    );
-    if (result == null || result.files.single.path == null) return;
+    if (_publishing || _mediaPickerActive) return;
+    setState(() => _mediaPickerActive = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const [
+          'mp3',
+          'wav',
+          'm4a',
+          'ogg',
+          'aac',
+          'opus',
+          'webm',
+          'amr'
+        ],
+      );
+      if (!mounted ||
+          _publishing ||
+          result == null ||
+          result.files.isEmpty ||
+          result.files.single.path == null) {
+        return;
+      }
 
-    // 本地预检测：超出后台配置的音频大小限制时立即提示
-    final msg = await UploadLimitsService.shared
-        .check(result.files.single.size, 'audio');
-    if (msg != null) {
-      showColibriToast('音频过大',
-          message: msg, backgroundColor: cRed, colorText: Colors.white);
-      return;
+      // 本地预检测：超出后台配置的音频大小限制时立即提示
+      final msg = await UploadLimitsService.shared
+          .check(result.files.single.size, 'audio');
+      if (!mounted || _publishing) return;
+      if (msg != null) {
+        showColibriToast(LKeys.postAudioTooLarge.tr,
+            message: msg, backgroundColor: cRed, colorText: Colors.white);
+        return;
+      }
+
+      await _revokeUploadedImages();
+      if (!mounted || _publishing) return;
+      setState(() {
+        _images.clear();
+        _clearMediaState();
+        _mediaPath = result.files.single.path!;
+        _mediaName = result.files.single.name;
+        _mediaType = 'audio';
+        _mediaFileSize = result.files.single.size;
+      });
+      _syncHasContent();
+    } finally {
+      if (mounted) setState(() => _mediaPickerActive = false);
     }
-
-    await _revokeUploadedImages();
-    setState(() {
-      _images.clear();
-      _clearMediaState();
-      _mediaPath = result.files.single.path!;
-      _mediaName = result.files.single.name;
-      _mediaType = 'audio';
-      _mediaFileSize = result.files.single.size;
-    });
-    _syncHasContent();
   }
 
   Future<void> _pickDocument() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    if (result == null || result.files.single.path == null) return;
+    if (_publishing || _mediaPickerActive) return;
+    setState(() => _mediaPickerActive = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
+      if (!mounted ||
+          _publishing ||
+          result == null ||
+          result.files.isEmpty ||
+          result.files.single.path == null) {
+        return;
+      }
 
-    // 本地预检测：超出后台配置的文档大小限制时立即提示
-    final msg = await UploadLimitsService.shared
-        .check(result.files.single.size, 'document');
-    if (msg != null) {
-      showColibriToast('文件过大',
-          message: msg, backgroundColor: cRed, colorText: Colors.white);
-      return;
+      // 本地预检测：超出后台配置的文档大小限制时立即提示
+      final msg = await UploadLimitsService.shared
+          .check(result.files.single.size, 'document');
+      if (!mounted || _publishing) return;
+      if (msg != null) {
+        showColibriToast(LKeys.postFileTooLarge.tr,
+            message: msg, backgroundColor: cRed, colorText: Colors.white);
+        return;
+      }
+
+      await _revokeUploadedImages();
+      if (!mounted || _publishing) return;
+      setState(() {
+        _images.clear();
+        _clearMediaState();
+        _mediaPath = result.files.single.path!;
+        _mediaName = result.files.single.name;
+        _mediaType = 'document';
+        _mediaFileSize = result.files.single.size;
+      });
+      _syncHasContent();
+    } finally {
+      if (mounted) setState(() => _mediaPickerActive = false);
     }
-
-    await _revokeUploadedImages();
-    setState(() {
-      _images.clear();
-      _clearMediaState();
-      _mediaPath = result.files.single.path!;
-      _mediaName = result.files.single.name;
-      _mediaType = 'document';
-      _mediaFileSize = result.files.single.size;
-    });
-    _syncHasContent();
   }
 
   /// 移除单媒体。已上传的先从服务器草稿撤回（video/audio 的草稿会被整帖删除）。
   Future<void> _clearMedia() async {
-    if (_mediaStatus == _UploadStatus.uploading) return;
+    if (_publishing || _mediaStatus == _UploadStatus.uploading) return;
     if (_mediaStatus == _UploadStatus.uploaded) {
       if (_mediaServerId != null) {
         try {
           await ColibriTimelineService.shared.deleteMedia(_mediaServerId!);
         } catch (e) {
-          showColibriToast('移除失败',
-              message: '未能从草稿撤回该文件：$e',
+          showColibriToast(LKeys.postRemoveFailed.tr,
+              message: LKeys.postDraftFileRemoveFailed.trParams({'p1': '$e'}),
               backgroundColor: cRed,
               colorText: Colors.white);
           return;
@@ -321,12 +373,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   // ===================== 投票编辑 =====================
 
   void _addPollOption() {
-    if (_pollOptions.length >= 10) return;
+    if (_publishing || _pollOptions.length >= 10) return;
     setState(() => _pollOptions.add(TextEditingController()));
   }
 
   void _removePollOption(int index) {
-    if (_pollOptions.length <= 2) return;
+    if (_publishing || _pollOptions.length <= 2) return;
     setState(() {
       _pollOptions[index].dispose();
       _pollOptions.removeAt(index);
@@ -340,13 +392,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() {
       _mediaStatus = _UploadStatus.uploading;
       _mediaProgress = 0;
-      _uploadLabel = '上传 0%';
+      _uploadLabel = LKeys.postUploadProgressZero.tr;
     });
     void onProgress(double p) {
       if (!mounted) return;
       setState(() {
         _mediaProgress = p;
-        _uploadLabel = '上传 ${(p * 100).round()}%';
+        _uploadLabel =
+            LKeys.postUploadPercent.trParams({'p1': '${(p * 100).round()}'});
       });
     }
 
@@ -379,8 +432,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _publish() async {
-    if (_publishing || !_hasContent) return;
+    if (_publishing || _mediaPickerActive || !_hasContent) return;
     final content = _content.text.trim();
+    late final ColibriPost publishedPost;
 
     if (_pollMode) {
       final options = _pollOptions
@@ -388,22 +442,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           .where((o) => o.isNotEmpty)
           .toList();
       if (options.length < 2) {
-        showColibriToast('完善投票',
-            message: '至少需要填写 2 个选项',
+        showColibriToast(LKeys.postCompletePoll.tr,
+            message: LKeys.postAtLeastTwoOptions.tr,
             backgroundColor: cRed,
             colorText: Colors.white);
         return;
       }
       setState(() => _publishing = true);
       try {
-        await ColibriTimelineService.shared.createPost(
+        publishedPost = await ColibriTimelineService.shared.createPost(
           content: content,
           pollOptions: options,
           isSensitive: _isSensitive,
           isAiGenerated: _isAiGenerated,
         );
       } catch (e) {
-        showColibriToast('发布失败',
+        showColibriToast(LKeys.feedPublishFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
             colorText: Colors.white);
@@ -426,7 +480,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             setState(() {
               item.status = _UploadStatus.uploading;
               item.progress = 0;
-              _uploadLabel = '图片 ${done + 1}/$total';
+              _uploadLabel = LKeys.postImageProgress.trParams({
+                'p1': '${done + 1}',
+                'p2': '$total',
+              });
             });
             try {
               final mediaId = await ColibriTimelineService.shared.uploadImage(
@@ -445,8 +502,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             } catch (e) {
               if (!mounted) return;
               setState(() => item.status = _UploadStatus.failed);
-              showColibriToast('图片上传失败',
-                  message: '$e\n点击红色图片可单独重试',
+              showColibriToast(LKeys.postImageUploadFailed.tr,
+                  message: LKeys.postImageRetryHint.trParams({'p1': '$e'}),
                   backgroundColor: cRed,
                   colorText: Colors.white);
               setState(() => _publishing = false);
@@ -460,13 +517,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         }
         // 3) 全部媒体就绪，草稿转正式帖
         if (mounted) setState(() => _uploadLabel = null);
-        await ColibriTimelineService.shared.createPost(
+        publishedPost = await ColibriTimelineService.shared.createPost(
           content: content,
           isSensitive: _isSensitive,
           isAiGenerated: _isAiGenerated,
         );
       } catch (e) {
-        showColibriToast('发布失败',
+        showColibriToast(LKeys.feedPublishFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
             colorText: Colors.white);
@@ -474,10 +531,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         return;
       }
     }
-    Get.back();
+    Get.back(result: publishedPost);
     HapticManager.shared.success();
-    showColibriToast('已发布',
-        message: '帖子发布成功', backgroundColor: cGreen, colorText: Colors.white);
+    showColibriToast(LKeys.feedPublished.tr,
+        message: LKeys.postPublishSuccess.tr,
+        backgroundColor: cGreen,
+        colorText: Colors.white);
   }
 
   /// 单张图片重试（仅 failed 状态）。成功后不自动发布，用户点「发布」继续（自动跳过已上传）。
@@ -502,14 +561,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         item.progress = 1;
         item.serverMediaId = mediaId;
       });
-      showColibriToast('上传成功',
-          message: '点击「发布」完成发帖',
+      showColibriToast(LKeys.postUploadSuccess.tr,
+          message: LKeys.postTapPublish.tr,
           backgroundColor: cGreen,
           colorText: Colors.white);
     } catch (e) {
       if (!mounted) return;
       setState(() => item.status = _UploadStatus.failed);
-      showColibriToast('上传失败',
+      showColibriToast(LKeys.postUploadFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -520,27 +579,32 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _retryMedia() async {
     if (_publishing ||
         _mediaPath == null ||
-        _mediaStatus != _UploadStatus.failed) return;
+        _mediaStatus != _UploadStatus.failed) {
+      return;
+    }
     setState(() => _publishing = true);
+    late final ColibriPost publishedPost;
     try {
       await _uploadMedia();
-      await ColibriTimelineService.shared.createPost(
+      publishedPost = await ColibriTimelineService.shared.createPost(
         content: _content.text.trim(),
         isSensitive: _isSensitive,
         isAiGenerated: _isAiGenerated,
       );
     } catch (e) {
-      showColibriToast('发布失败',
+      showColibriToast(LKeys.feedPublishFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
       if (mounted) setState(() => _publishing = false);
       return;
     }
-    Get.back();
+    Get.back(result: publishedPost);
     HapticManager.shared.success();
-    showColibriToast('已发布',
-        message: '帖子发布成功', backgroundColor: cGreen, colorText: Colors.white);
+    showColibriToast(LKeys.feedPublished.tr,
+        message: LKeys.postPublishSuccess.tr,
+        backgroundColor: cGreen,
+        colorText: Colors.white);
   }
 
   // ===================== 媒体预览 =====================
@@ -574,7 +638,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '已选 ${_images.length}/$_maxImages 张图片',
+            LKeys.postSelectedImages.trParams({
+              'p1': '${_images.length}',
+              'p2': '$_maxImages',
+            }),
             style: const TextStyle(fontSize: 12, color: cLightText),
           ),
         ],
@@ -591,10 +658,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ? Icons.graphic_eq_rounded
             : Icons.insert_drive_file_rounded;
     final typeLabel = _mediaType == 'video'
-        ? '视频'
+        ? LKeys.postVideo.tr
         : _mediaType == 'audio'
-            ? '音频'
-            : '文件';
+            ? LKeys.postAudio.tr
+            : LKeys.postFile.tr;
 
     final card = Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -617,7 +684,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_mediaName ?? '附件',
+                    Text(_mediaName ?? LKeys.feedAttachment.tr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -638,14 +705,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             _MediaProgressSection(
                 progress: _mediaProgress, fileSize: _mediaFileSize)
           else if (_mediaStatus == _UploadStatus.uploaded)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: cGreen, size: 16),
-                  SizedBox(width: 5),
-                  Text('已上传',
-                      style: TextStyle(
+                  const Icon(Icons.check_circle_rounded,
+                      color: cGreen, size: 16),
+                  const SizedBox(width: 5),
+                  Text(LKeys.postUploaded.tr,
+                      style: const TextStyle(
                           fontSize: 12.5,
                           color: cGreen,
                           fontWeight: FontWeight.w700)),
@@ -653,14 +721,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ),
             )
           else if (_mediaStatus == _UploadStatus.failed)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline_rounded, color: cRed, size: 16),
-                  SizedBox(width: 5),
-                  Text('上传失败 · 点击卡片重试',
-                      style: TextStyle(
+                  const Icon(Icons.error_outline_rounded,
+                      color: cRed, size: 16),
+                  const SizedBox(width: 5),
+                  Text(LKeys.postUploadFailedTapRetry.tr,
+                      style: const TextStyle(
                           fontSize: 12.5,
                           color: cRed,
                           fontWeight: FontWeight.w700)),
@@ -735,9 +804,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 Expanded(
                   child: TextField(
                     controller: c,
+                    enabled: !_publishing,
                     maxLength: 100,
                     decoration: InputDecoration(
-                      hintText: '选项 ${index + 1}',
+                      hintText: LKeys.postOptionNumber
+                          .trParams({'p1': '${index + 1}'}),
                       hintStyle:
                           const TextStyle(color: cLightText, fontSize: 15),
                       isDense: true,
@@ -778,14 +849,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 color: cPrimarySoft,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_circle_outline_rounded,
+                  const Icon(Icons.add_circle_outline_rounded,
                       color: cGreen, size: 19),
-                  SizedBox(width: 6),
-                  Text('添加选项',
-                      style: TextStyle(
+                  const SizedBox(width: 6),
+                  Text(LKeys.postAddOption.tr,
+                      style: const TextStyle(
                           color: cGreen,
                           fontSize: 14.5,
                           fontWeight: FontWeight.w700)),
@@ -797,13 +868,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
+            if (_publishing) return;
             setState(() => _pollMode = false);
             _syncHasContent();
           },
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
-            child: Text('取消使用投票',
-                style: TextStyle(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(LKeys.postRemovePoll.tr,
+                style: const TextStyle(
                     fontSize: 13,
                     color: cLightText,
                     decoration: TextDecoration.underline)),
@@ -823,80 +895,95 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: const Text('发帖',
-            style: TextStyle(
+        title: Text(LKeys.postSubmitPost.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
-        leading: BackButton(color: cBlack, onPressed: () => Get.back()),
+        leading: BackButton(
+          color: cBlack,
+          onPressed: _publishing ? null : () => Get.back(),
+        ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 6, 18, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 身份行：头像 + 名字
-                  Obx(_authorRow),
-                  const SizedBox(height: 6),
-                  // 正文输入（无边框大输入区，支持 @提及联想）
-                  MentionField(
-                    controller: _content,
-                    hintText: _pollMode ? '投票问题…' : '分享你的想法…',
-                    maxLines: null,
-                    minLines: 3,
-                    maxLength: 1000,
-                    style: const TextStyle(
-                        fontSize: 19, height: 1.5, color: cMainText),
-                    hintStyle: const TextStyle(
-                        color: cLightText, fontSize: 18, height: 1.5),
-                    decoration: InputDecoration(
-                      hintText: _pollMode ? '投票问题…' : '分享你的想法…',
-                      hintStyle: const TextStyle(
-                          color: cLightText, fontSize: 18, height: 1.5),
-                      border: InputBorder.none,
-                      counterText: '',
-                    ),
-                  ),
-                  // 字数（软提示，1000 上限，实时跟随输入更新）
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _content,
-                      builder: (context, value, _) => Text(
-                        '${value.text.length}/1000',
-                        style: const TextStyle(fontSize: 11, color: cLightText),
+      body: PopScope(
+        canPop: !_publishing,
+        child: Column(
+          children: [
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: _publishing,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 身份行：头像 + 名字
+                      Obx(_authorRow),
+                      const SizedBox(height: 6),
+                      // 正文输入（无边框大输入区，支持 @提及联想）
+                      MentionField(
+                        controller: _content,
+                        focusNode: _contentFocus,
+                        hintText: _pollMode
+                            ? LKeys.postPollQuestionHint.tr
+                            : LKeys.postShareThoughtsHint.tr,
+                        maxLines: null,
+                        minLines: 3,
+                        maxLength: 1000,
+                        style: const TextStyle(
+                            fontSize: 19, height: 1.5, color: cMainText),
+                        hintStyle: const TextStyle(
+                            color: cLightText, fontSize: 18, height: 1.5),
+                        decoration: InputDecoration(
+                          hintText: _pollMode
+                              ? LKeys.postPollQuestionHint.tr
+                              : LKeys.postShareThoughtsHint.tr,
+                          hintStyle: const TextStyle(
+                              color: cLightText, fontSize: 18, height: 1.5),
+                          border: InputBorder.none,
+                          counterText: '',
+                        ),
                       ),
-                    ),
-                  ),
-                  // 标记提示（对齐网页端：敏感时显示警示条，AI 时显示生成提示）
-                  if (_isSensitive) _sensitiveNotice(),
-                  if (_isAiGenerated)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.auto_awesome_rounded,
-                              size: 14, color: Color(0xFFF59E0B)),
-                          SizedBox(width: 4),
-                          Text('AI 生成',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFF59E0B))),
-                        ],
+                      // 字数（软提示，1000 上限，实时跟随输入更新）
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _content,
+                          builder: (context, value, _) => Text(
+                            '${value.text.length}/1000',
+                            style: const TextStyle(
+                                fontSize: 11, color: cLightText),
+                          ),
+                        ),
                       ),
-                    ),
-                  // 媒体预览 / 投票编辑
-                  if (_pollMode) _pollEditor() else _mediaPreview(),
-                ],
+                      // 标记提示（对齐网页端：敏感时显示警示条，AI 时显示生成提示）
+                      if (_isSensitive) _sensitiveNotice(),
+                      if (_isAiGenerated)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.auto_awesome_rounded,
+                                  size: 14, color: Color(0xFFF59E0B)),
+                              const SizedBox(width: 4),
+                              Text(LKeys.feedAiGenerated.tr,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFF59E0B))),
+                            ],
+                          ),
+                        ),
+                      // 媒体预览 / 投票编辑
+                      if (_pollMode) _pollEditor() else _mediaPreview(),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          // 底部固定工具栏
-          _buildToolbar(),
-        ],
+            // 底部固定工具栏
+            _buildToolbar(),
+          ],
+        ),
       ),
     );
   }
@@ -954,13 +1041,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: amber.withValues(alpha: 0.35)),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, size: 18, color: amber),
-            SizedBox(width: 8),
+            const Icon(Icons.warning_amber_rounded, size: 18, color: amber),
+            const SizedBox(width: 8),
             Expanded(
-              child: Text('此帖子将标记为敏感内容',
-                  style: TextStyle(
+              child: Text(LKeys.postSensitiveNotice.tr,
+                  style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                       color: cDarkText)),
@@ -979,16 +1066,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         children: [
           _MarkChip(
             icon: Icons.text_fields_rounded,
-            label: '格式',
+            label: LKeys.postFormat.tr,
             active: false,
-            onTap: () => showMarkdownCheatSheet(context),
+            onTap: () => showMarkdownCheatSheet(
+              context,
+              onSelected: (preset) {
+                applyMarkdownFormatPreset(_content, preset);
+                _contentFocus.requestFocus();
+              },
+            ),
           ),
           const SizedBox(width: 8),
           _MarkChip(
             icon: Icons.warning_amber_rounded,
-            label: '敏感内容',
+            label: LKeys.postSensitiveContent.tr,
             active: _isSensitive,
             onTap: () {
+              if (_publishing) return;
               setState(() => _isSensitive = !_isSensitive);
               HapticManager.shared.selection();
             },
@@ -996,9 +1090,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           const SizedBox(width: 8),
           _MarkChip(
             icon: Icons.auto_awesome_rounded,
-            label: 'AI 生成',
+            label: LKeys.feedAiGenerated.tr,
             active: _isAiGenerated,
             onTap: () {
+              if (_publishing) return;
               setState(() => _isAiGenerated = !_isAiGenerated);
               HapticManager.shared.selection();
             },
@@ -1021,28 +1116,54 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildMarksRow(),
+            AbsorbPointer(
+              absorbing: _publishing,
+              child: Opacity(
+                opacity: _publishing ? 0.45 : 1,
+                child: _buildMarksRow(),
+              ),
+            ),
             Row(
               children: [
-                if (!_pollMode) ...[
-                  _ToolIcon(icon: Icons.image_rounded, onTap: _pickImage),
-                  _ToolIcon(icon: Icons.videocam_rounded, onTap: _pickVideo),
-                  _ToolIcon(icon: Icons.graphic_eq_rounded, onTap: _pickAudio),
-                  _ToolIcon(
-                      icon: Icons.insert_drive_file_rounded,
-                      onTap: _pickDocument),
-                ],
-                _ToolIcon(
-                  icon: Icons.poll_rounded,
-                  active: _pollMode,
-                  onTap: () {
-                    setState(() => _pollMode = !_pollMode);
-                    _syncHasContent();
-                  },
+                if (!_pollMode)
+                  AbsorbPointer(
+                    absorbing: _publishing,
+                    child: Opacity(
+                      opacity: _publishing ? 0.45 : 1,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ToolIcon(
+                              icon: Icons.image_rounded, onTap: _pickImage),
+                          _ToolIcon(
+                              icon: Icons.videocam_rounded, onTap: _pickVideo),
+                          _ToolIcon(
+                              icon: Icons.graphic_eq_rounded,
+                              onTap: _pickAudio),
+                          _ToolIcon(
+                              icon: Icons.insert_drive_file_rounded,
+                              onTap: _pickDocument),
+                        ],
+                      ),
+                    ),
+                  ),
+                AbsorbPointer(
+                  absorbing: _publishing,
+                  child: Opacity(
+                    opacity: _publishing ? 0.45 : 1,
+                    child: _ToolIcon(
+                      icon: Icons.poll_rounded,
+                      active: _pollMode,
+                      onTap: () {
+                        setState(() => _pollMode = !_pollMode);
+                        _syncHasContent();
+                      },
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 _PublishButton(
-                  enabled: _hasContent && !_publishing,
+                  enabled: _hasContent && !_publishing && !_mediaPickerActive,
                   loading: _publishing,
                   progressText: _uploadLabel,
                   onTap: _publish,
@@ -1182,8 +1303,8 @@ class _ImageTile extends StatelessWidget {
                               color: cRed, size: 17),
                         ),
                         const SizedBox(height: 5),
-                        const Text('点击重试',
-                            style: TextStyle(
+                        Text(LKeys.postTapToRetry.tr,
+                            style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700)),
@@ -1292,7 +1413,7 @@ class _MediaProgressSection extends StatelessWidget {
   }
 }
 
-/// 标记功能胶囊（格式/敏感/AI）：软绿圆角底，激活时绿底黑字。
+/// 标记功能胶囊（格式/敏感/AI）：选中时使用深色底和白色前景。
 class _MarkChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1313,20 +1434,20 @@ class _MarkChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: active ? cPrimary : cPrimarySoft,
+          color: active ? cBlack : cPrimarySoft,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: active ? cBlack : cGreen),
+            Icon(icon, size: 15, color: active ? cWhite : cGreen),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: active ? cBlack : cGreen,
+                color: active ? cWhite : cGreen,
               ),
             ),
           ],
@@ -1401,7 +1522,7 @@ class _PublishButton extends StatelessWidget {
                               strokeWidth: 2.2, color: Colors.white)),
                       const SizedBox(width: 8),
                       Text(
-                        progressText ?? '发布中',
+                        progressText ?? LKeys.postPublishing.tr,
                         style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -1410,7 +1531,7 @@ class _PublishButton extends StatelessWidget {
                     ],
                   )
                 : Text(
-                    '发布',
+                    LKeys.feedPublish.tr,
                     style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w800,

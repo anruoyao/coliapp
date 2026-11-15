@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_version_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/extensions/font_extension.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -27,7 +29,7 @@ class ForcedUpdateScreen extends StatelessWidget {
   Future<void> _update(BuildContext context) async {
     final url = version.downloadUrl.trim();
     if (url.isEmpty) {
-      showColibriToast('更新地址缺失，请稍后再试',
+      showColibriToast(LKeys.updateUrlMissing.tr,
           context: context, status: ColibriToastStatus.error);
       return;
     }
@@ -36,7 +38,7 @@ class ForcedUpdateScreen extends StatelessWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!opened) {
-      showColibriToast('无法打开下载链接，请手动访问',
+      showColibriToast(LKeys.apiDownloadLinkOpenFailed.tr,
           context: context, status: ColibriToastStatus.error);
     }
   }
@@ -98,7 +100,7 @@ class ForcedUpdateScreen extends StatelessWidget {
                     const SizedBox(height: 34),
 
                     Text(
-                      '需要更新才能继续使用',
+                      LKeys.updateRequired.tr,
                       textAlign: TextAlign.center,
                       style: MyTextStyle.gilroyExtraBold(
                           size: 24, color: Colors.white),
@@ -106,7 +108,8 @@ class ForcedUpdateScreen extends StatelessWidget {
                     const SizedBox(height: 12),
 
                     Text(
-                      '此版本已停止支持，请升级到 v${version.code} 以获得最新功能与安全修复。',
+                      LKeys.updateNoLongerSupported
+                          .trParams({'p1': version.code}),
                       textAlign: TextAlign.center,
                       style:
                           MyTextStyle.gilroyRegular(size: 15, color: cLightText)
@@ -133,7 +136,7 @@ class ForcedUpdateScreen extends StatelessWidget {
                                 Icon(Icons.auto_awesome_rounded,
                                     size: 15, color: cPrimary),
                                 const SizedBox(width: 6),
-                                Text('本次更新内容',
+                                Text(LKeys.updateChangelog.tr,
                                     style: MyTextStyle.gilroyBold(
                                         size: 13, color: cDarkText)),
                               ],
@@ -189,7 +192,7 @@ class ForcedUpdateScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-                        child: Text('立即更新',
+                        child: Text(LKeys.updateNow.tr,
                             style: MyTextStyle.gilroyBold(
                                 size: 17, color: Colors.white)),
                       ),
@@ -197,7 +200,7 @@ class ForcedUpdateScreen extends StatelessWidget {
                     const SizedBox(height: 14),
 
                     Text(
-                      '更新完成后即可正常使用',
+                      LKeys.updateReadyToUse.tr,
                       style: MyTextStyle.gilroyRegular(
                           size: 12, color: cLightText),
                     ),

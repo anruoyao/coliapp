@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_social_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
-import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/common/api_service/colibri_timeline_service.dart';
 import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_detail_screen.dart';
 import 'package:untitled/screens/colibri_social/colibri_profile_screen.dart';
@@ -29,24 +29,33 @@ class _ColibriNotificationsScreenState
   final List<ColibriNotification> _notifications = [];
   bool _loading = true;
 
+  /// 实时回调必须持有同一引用：旧写法 on/off 各传一个新闭包，off 永远删不掉，
+  /// 监听随页面进出累积，一条通知会触发 N 次列表拉取。
+  late final void Function(dynamic) _onRealtimeNotification =
+      (_) => _load(silent: true);
+
   @override
   void initState() {
     super.initState();
     _load();
     // 实时：收到新社交通知广播自动刷新列表
-    ReverbService.shared.on(ReverbService.eventNotification, (_) => _load());
+    ReverbService.shared
+        .on(ReverbService.eventNotification, _onRealtimeNotification);
   }
 
   @override
   void dispose() {
-    ReverbService.shared.off(ReverbService.eventNotification, (_) => _load());
+    ReverbService.shared
+        .off(ReverbService.eventNotification, _onRealtimeNotification);
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  /// [silent] 为 true 时不切全屏 loading：实时刷新只原地更新列表，避免闪屏。
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final list = await ColibriSocialService.shared.fetchNotifications();
+      if (!mounted) return;
       setState(() => _notifications
         ..clear()
         ..addAll(list));
@@ -56,22 +65,27 @@ class _ColibriNotificationsScreenState
     }
   }
 
-  Future<void> _delete(ColibriNotification n) async {
+  Future<bool> _delete(ColibriNotification n) async {
     try {
       await ColibriSocialService.shared.deleteNotification(n.id);
-      setState(() => _notifications.removeWhere((x) => x.id == n.id));
-    } catch (_) {}
+      if (mounted) {
+        setState(() => _notifications.removeWhere((x) => x.id == n.id));
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _confirmDelete(ColibriNotification n) {
-    showColibriBottomSheet<void>(
-      _DeleteNotificationSheet(onConfirm: () => _delete(n)),
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.36),
-      useSafeArea: true,
-      isScrollControlled: true,
-      constraints: const BoxConstraints(maxWidth: 420, maxHeight: 280),
+    showColibriConfirmDialog(
+      context,
+      icon: Icons.notifications_off_outlined,
+      title: LKeys.socialDeleteNotification.tr,
+      message: LKeys.socialDeleteNotificationConfirm.tr,
+      confirmText: LKeys.feedDelete.tr,
+      cancelText: LKeys.commonCancel.tr,
+      onConfirm: () => _delete(n),
     );
   }
 
@@ -99,13 +113,13 @@ class _ColibriNotificationsScreenState
     if (actorId == null) return;
     try {
       await ColibriSocialService.shared.acceptFollowRequest(actorId);
-      showColibriToast('已同意关注请求',
+      showColibriToast(LKeys.socialFollowRequestAccepted.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
       // 服务端会清掉该请求者的所有请求通知；本地也按请求者移除，避免重复请求残留
       setState(() => _notifications
           .removeWhere((x) => _followRequestActorId(x) == actorId));
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -117,13 +131,13 @@ class _ColibriNotificationsScreenState
     if (actorId == null) return;
     try {
       await ColibriSocialService.shared.declineFollowRequest(actorId);
-      showColibriToast('已拒绝关注请求',
+      showColibriToast(LKeys.socialFollowRequestDeclined.tr,
           message: '', backgroundColor: cLightBg, colorText: cMainText);
       // 服务端会清掉该请求者的所有请求通知；本地也按请求者移除
       setState(() => _notifications
           .removeWhere((x) => _followRequestActorId(x) == actorId));
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -313,8 +327,8 @@ class _ColibriNotificationsScreenState
                         color: cLightBg,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: const Text('拒绝',
-                          style: TextStyle(
+                      child: Text(LKeys.socialDecline.tr,
+                          style: const TextStyle(
                               fontSize: 13,
                               color: cMainText,
                               fontWeight: FontWeight.w600)),
@@ -330,8 +344,8 @@ class _ColibriNotificationsScreenState
                         color: cPrimary,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: const Text('同意',
-                          style: TextStyle(
+                      child: Text(LKeys.socialAccept.tr,
+                          style: const TextStyle(
                               fontSize: 13,
                               color: Colors.white,
                               fontWeight: FontWeight.w600)),
@@ -470,16 +484,16 @@ class _ColibriNotificationsScreenState
                 if (n.marketingDestinationUrl != null)
                   GestureDetector(
                     onTap: () => _openDestination(n),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('查看详情',
-                            style: TextStyle(
+                        Text(LKeys.socialViewDetails.tr,
+                            style: const TextStyle(
                                 fontSize: 13,
                                 color: cPrimary,
                                 fontWeight: FontWeight.w600)),
-                        SizedBox(width: 2),
-                        Icon(Icons.open_in_new_rounded,
+                        const SizedBox(width: 2),
+                        const Icon(Icons.open_in_new_rounded,
                             size: 14, color: cPrimary),
                       ],
                     ),
@@ -542,8 +556,9 @@ class _ColibriNotificationsScreenState
                   Text(
                     [
                       if (author.isNotEmpty) author,
-                      '$reactions 赞同',
-                      '$comments 评论',
+                      LKeys.socialReactionsCount
+                          .trParams({'p1': '${reactions}'}),
+                      LKeys.socialCommentsCount.trParams({'p1': '${comments}'}),
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -568,8 +583,8 @@ class _ColibriNotificationsScreenState
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: const Text('通知',
-            style: TextStyle(
+        title: Text(LKeys.commonNotifications.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         leading: widget.asTab
             ? null
@@ -583,11 +598,11 @@ class _ColibriNotificationsScreenState
               child: _notifications.isEmpty
                   ? ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
+                      children: [
                         ColibriEmptyState(
                           icon: Icons.notifications_none_rounded,
-                          title: '暂无通知',
-                          subtitle: '有新动态时会在这里提醒你',
+                          title: LKeys.socialNoNotifications.tr,
+                          subtitle: LKeys.socialNoNotificationsDesc.tr,
                           topSpacing: 90,
                         ),
                       ],
@@ -601,64 +616,6 @@ class _ColibriNotificationsScreenState
                           _buildItem(_notifications[index]),
                     ),
             ),
-    );
-  }
-}
-
-class _DeleteNotificationSheet extends StatelessWidget {
-  final VoidCallback onConfirm;
-
-  const _DeleteNotificationSheet({required this.onConfirm});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: cWhite,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '删除通知',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: cMainText,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '确定删除这条通知吗？',
-              style: TextStyle(fontSize: 14, color: cLightText),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    onConfirm();
-                  },
-                  child: const Text(
-                    '删除',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
 import 'package:untitled/common/api_service/colibri_timeline_service.dart';
@@ -37,6 +36,8 @@ class ColibriPostCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onChanged; // 帖子状态变化（删除等）后交由父级刷新
   final ValueChanged<bool>? onBookmarked; // 收藏状态切换成功后回调（true=已收藏）
+  final bool showProfilePinAction;
+  final Future<void> Function(ColibriPost post)? onProfilePinChanged;
   final bool resizeMediaToDisplayBounds;
   @visibleForTesting
   final Future<TranslationResult> Function(int postId, String target)?
@@ -48,6 +49,8 @@ class ColibriPostCard extends StatefulWidget {
       this.onTap,
       this.onChanged,
       this.onBookmarked,
+      this.showProfilePinAction = false,
+      this.onProfilePinChanged,
       this.resizeMediaToDisplayBounds = false,
       this.translatePost});
 
@@ -59,6 +62,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
   late ColibriPost _post;
   bool _liked = false;
   bool _deleting = false;
+  bool _profilePinning = false;
   bool _translating = false;
   bool _showTranslation = false;
   String? _translatedText;
@@ -125,7 +129,8 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
         showColibriToast(LKeys.translationFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
-            colorText: Colors.white);
+            colorText: Colors.white,
+            frosted: true);
       }
     } finally {
       if (isCurrent()) setState(() => _translating = false);
@@ -148,6 +153,12 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
       _resetTranslation();
       _post = widget.post;
       _liked = _post.liked;
+    } else if (_post.isProfilePinned != widget.post.isProfilePinned ||
+        _post.canPinToProfile != widget.post.canPinToProfile) {
+      _post = _post.copyWith(
+        isProfilePinned: widget.post.isProfilePinned,
+        canPinToProfile: widget.post.canPinToProfile,
+      );
     }
   }
 
@@ -155,7 +166,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
       [String unifiedId = ColibriTimelineService.likeUnifiedId]) async {
     // 访客：不发请求，弹登录引导
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '点赞和表情反应');
+      AuthGate.requireLogin(() {}, feature: LKeys.feedLikeAndReact.tr);
       return;
     }
     try {
@@ -172,7 +183,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
   /// 投票成功后更新帖子内嵌的投票数据。
   void _handlePollVote(ColibriPoll newPoll) {
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '投票');
+      AuthGate.requireLogin(() {}, feature: LKeys.feedPoll.tr);
       return;
     }
     setState(() => _post = _post.copyWith(poll: newPoll));
@@ -181,7 +192,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
 
   Future<void> _toggleBookmark() async {
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '收藏');
+      AuthGate.requireLogin(() {}, feature: LKeys.feedSave.tr);
       return;
     }
     final added = !BookmarkStore.i.isBookmarked(_post.id);
@@ -195,11 +206,22 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
       widget.onBookmarked?.call(result);
     } catch (e) {
       if (mounted) {
-        showColibriToast(added ? '收藏失败' : '取消收藏失败',
+        showColibriToast(
+            added ? LKeys.feedSaveFailed.tr : LKeys.feedUnsaveFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
             colorText: Colors.white);
       }
+    }
+  }
+
+  Future<void> _toggleProfilePin() async {
+    if (_profilePinning || widget.onProfilePinChanged == null) return;
+    setState(() => _profilePinning = true);
+    try {
+      await widget.onProfilePinChanged!(_post);
+    } finally {
+      if (mounted) setState(() => _profilePinning = false);
     }
   }
 
@@ -208,16 +230,16 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
     final confirmed = await showColibriConfirmDialog(
       context,
       icon: Icons.delete_outline_rounded,
-      title: '删除这条帖子？',
-      message: '帖子及其评论、点赞将被永久删除，无法恢复',
-      confirmText: '删除',
+      title: LKeys.feedDeletePostTitle.tr,
+      message: LKeys.feedDeletePostDesc.tr,
+      confirmText: LKeys.feedDelete.tr,
       onConfirm: () async {
         setState(() => _deleting = true);
         try {
           await ColibriTimelineService.shared.deletePost(_post.id);
           return true;
         } catch (e) {
-          showColibriToast('删除失败',
+          showColibriToast(LKeys.feedDeleteFailed.tr,
               message: e.toString(),
               backgroundColor: cRed,
               colorText: Colors.white);
@@ -230,7 +252,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
     if (!confirmed || !mounted) return;
     widget.onChanged?.call();
     if (Navigator.of(context).canPop()) Get.back(); // 详情页删除后返回；列表由 onChanged 刷新
-    showColibriToast('已删除',
+    showColibriToast(LKeys.feedPostDeleted.tr,
         message: '', backgroundColor: cGreen, colorText: Colors.white);
   }
 
@@ -239,7 +261,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
   Future<void> _copyLink() async {
     await Clipboard.setData(ClipboardData(text: _postLink));
     if (mounted) {
-      showColibriToast('已复制链接',
+      showColibriToast(LKeys.feedLinkCopied.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     }
   }
@@ -247,7 +269,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
   Future<void> _copyContent() async {
     await Clipboard.setData(ClipboardData(text: _post.content));
     if (mounted) {
-      showColibriToast('已复制文本',
+      showColibriToast(LKeys.feedTextCopied.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     }
   }
@@ -290,46 +312,65 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
     final guest = GuestSession.i.isGuest;
     showColibriSheet(
       context,
-      title: '帖子操作',
+      title: LKeys.feedPostOptions.tr,
       items: [
         // 访客：反应/收藏为登录后能力，菜单中直接隐藏（操作栏图标点击仍会弹引导）
         if (!guest)
           ColibriSheetItem(
             icon: Icons.add_reaction_rounded,
-            label: '添加反应',
+            label: LKeys.commonAddReaction.tr,
             onTap: () => showReactionPicker(
               context,
               onSelect: (code) => _toggleLike(code),
             ),
           ),
         ColibriSheetItem(
-            icon: Icons.arrow_outward_rounded, label: '打开帖子', onTap: _openPost),
+            icon: Icons.arrow_outward_rounded,
+            label: LKeys.feedOpenPost.tr,
+            onTap: _openPost),
+        if (widget.showProfilePinAction && _post.canPinToProfile)
+          ColibriSheetItem(
+            icon: _post.isProfilePinned
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
+            label: _post.isProfilePinned
+                ? LKeys.unpinFromProfile.tr
+                : LKeys.pinToProfile.tr,
+            onTap: _profilePinning ? null : _toggleProfilePin,
+          ),
         if (!guest)
           ColibriSheetItem(
             icon: BookmarkStore.i.isBookmarked(_post.id)
                 ? Icons.bookmark_rounded
                 : Icons.bookmark_border_rounded,
-            label: BookmarkStore.i.isBookmarked(_post.id) ? '取消收藏' : '收藏',
+            label: BookmarkStore.i.isBookmarked(_post.id)
+                ? LKeys.feedUnsave.tr
+                : LKeys.feedSave.tr,
             onTap: _toggleBookmark,
           ),
         if (_post.content.isNotEmpty)
           ColibriSheetItem(
               icon: Icons.text_fields_rounded,
-              label: '复制文本',
+              label: LKeys.feedCopyText.tr,
               onTap: _copyContent),
         ColibriSheetItem(
-            icon: Icons.link_rounded, label: '复制链接', onTap: _copyLink),
-        ColibriSheetItem(icon: Icons.share_rounded, label: '分享', onTap: _share),
+            icon: Icons.link_rounded,
+            label: LKeys.feedCopyLink.tr,
+            onTap: _copyLink),
+        ColibriSheetItem(
+            icon: Icons.share_rounded,
+            label: LKeys.feedShare.tr,
+            onTap: _share),
         if (_post.canDelete)
           ColibriSheetItem(
               icon: Icons.delete_outline_rounded,
-              label: '删除',
+              label: LKeys.feedDelete.tr,
               onTap: _delete,
               danger: true),
         if (_post.canReport)
           ColibriSheetItem(
               icon: Icons.report_gmailerrorred_rounded,
-              label: '举报',
+              label: LKeys.apiReport.tr,
               onTap: _report,
               danger: true),
       ],
@@ -488,6 +529,11 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_post.isProfilePinned)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: _ProfilePinnedBadge(),
+              ),
             // 作者行
             Row(
               children: [
@@ -634,7 +680,8 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
                   color: cLightText,
                   onTap: () {
                     if (GuestSession.i.isGuest) {
-                      AuthGate.requireLogin(() {}, feature: '表情反应');
+                      AuthGate.requireLogin(() {},
+                          feature: LKeys.feedReaction.tr);
                       return;
                     }
                     showReactionPicker(
@@ -849,14 +896,14 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
           color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.open_in_full_rounded,
+            const Icon(Icons.open_in_full_rounded,
                 color: Colors.white, size: 13),
-            SizedBox(width: 4),
-            Text('查看长图',
-                style: TextStyle(
+            const SizedBox(width: 4),
+            Text(LKeys.feedViewFullImage.tr,
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600)),
@@ -1125,13 +1172,13 @@ class _AiGeneratedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.auto_awesome_rounded, size: 14, color: _amber),
-        SizedBox(width: 4),
-        Text('AI 生成',
-            style: TextStyle(
+        const Icon(Icons.auto_awesome_rounded, size: 14, color: _amber),
+        const SizedBox(width: 4),
+        Text(LKeys.feedAiGenerated.tr,
+            style: const TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w600, color: _amber)),
       ],
     );
@@ -1181,14 +1228,47 @@ class _PinnedBadge extends StatelessWidget {
         color: cPrimary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(5),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.push_pin_rounded, size: 11, color: cPrimary),
-          SizedBox(width: 2),
-          Text('置顶',
-              style: TextStyle(
+          const Icon(Icons.push_pin_rounded, size: 11, color: cPrimary),
+          const SizedBox(width: 2),
+          Text(LKeys.feedPinned.tr,
+              style: const TextStyle(
                   fontSize: 10, fontWeight: FontWeight.w700, color: cPrimary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 个人主页置顶帖标签。
+class _ProfilePinnedBadge extends StatelessWidget {
+  const _ProfilePinnedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: cBlueTick.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.push_pin_outlined, size: 11, color: cBlueTick),
+          const SizedBox(width: 2),
+          Flexible(
+            child: Text(
+              LKeys.profilePinned.tr,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: cBlueTick,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1302,16 +1382,16 @@ class _ColibriReportLoadingSheet extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
+          const SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(strokeWidth: 2.2),
           ),
-          SizedBox(width: 12),
-          Text('正在加载举报选项'),
+          const SizedBox(width: 12),
+          Text(LKeys.feedReportOptionsLoading.tr),
         ],
       ),
     );
@@ -1334,9 +1414,9 @@ class _ColibriReportErrorSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('举报选项加载失败'),
+          Text(LKeys.feedReportOptionsFailed.tr),
           const SizedBox(height: 14),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
+          TextButton(onPressed: onRetry, child: Text(LKeys.commonRetry.tr)),
         ],
       ),
     );
@@ -1429,8 +1509,8 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
 
       if (mounted) {
         Navigator.of(context).pop();
-        showColibriToast('已提交举报',
-            message: '感谢你的反馈，我们会尽快处理',
+        showColibriToast(LKeys.feedReportSubmitted.tr,
+            message: LKeys.feedReportThanks.tr,
             backgroundColor: cGreen,
             colorText: Colors.white);
       }
@@ -1469,14 +1549,14 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
 
       setState(() => _submitting = false);
       Navigator.of(context).pop();
-      showColibriToast('举报失败',
+      showColibriToast(LKeys.feedReportFailed.tr,
           message: e.message, backgroundColor: cRed, colorText: Colors.white);
     } catch (e) {
       if (!mounted) return;
 
       setState(() => _submitting = false);
       Navigator.of(context).pop();
-      showColibriToast('举报失败',
+      showColibriToast(LKeys.feedReportFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -1485,92 +1565,75 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return LiquidGlassLens(
-      style: const LiquidGlassStyle(
-        shape: LiquidGlassShape.continuousRoundedRectangle(
-          cornerRadius: 28,
-          clipQuality: LiquidGlassClipQuality.exact,
-          borderWidth: 0.8,
-          lightIntensity: 1,
-          lightDirection: 45,
-          borderType: OpticalBorder(
-            borderSaturation: 1.1,
-            ambientIntensity: 0.9,
-            borderSolidity: 0.75,
-          ),
-        ),
-        appearance: LiquidGlassAppearance(
-          color: Color(0xF7FFFFFF),
-          blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-        ),
-        refraction: LiquidGlassRefraction(
-          distortion: 0.07,
-          distortionWidth: 16,
-          chromaticAberration: 0.0005,
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
-              child: SizedBox(
-                height: 42,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip: '关闭',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded, color: cBlack),
-                        style: IconButton.styleFrom(
-                          backgroundColor: cWhite,
-                          minimumSize: const Size(42, 42),
-                          shape: const CircleBorder(),
-                          padding: EdgeInsets.zero,
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: ColoredBox(
+        color: const Color(0xF7FFFFFF),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
+                child: SizedBox(
+                  height: 42,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          tooltip: LKeys.feedClose.tr,
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded, color: cBlack),
+                          style: IconButton.styleFrom(
+                            backgroundColor: cWhite,
+                            minimumSize: const Size(42, 42),
+                            shape: const CircleBorder(),
+                            padding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
-                    ),
-                    Text(
-                      _reasonIndex == null ? widget.info.title : '确认举报',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: cMainText),
-                    ),
-                  ],
+                      Text(
+                        _reasonIndex == null
+                            ? widget.info.title
+                            : LKeys.feedConfirmReport.tr,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: cMainText),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: cLightBg, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                _reasonIndex == null
-                    ? widget.info.description
-                    : '可补充更多细节或证据链接，帮助我们更快核实',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: cLightText),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: cLightBg, borderRadius: BorderRadius.circular(2)),
               ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: _reasonIndex == null
-                  ? _buildReasonStep()
-                  : _buildConfirmStep(),
-            ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  _reasonIndex == null
+                      ? widget.info.description
+                      : LKeys.feedReportDetailsHint.tr,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: cLightText),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: _reasonIndex == null
+                    ? _buildReasonStep()
+                    : _buildConfirmStep(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -1583,8 +1646,8 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('选择举报原因',
-              style: TextStyle(
+          Text(LKeys.feedSelectReportReason.tr,
+              style: const TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w700, color: cMainText)),
           const SizedBox(height: 4),
           ...List.generate(widget.info.reasons.length, (i) {
@@ -1620,8 +1683,8 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('补充说明（可选）',
-            style: TextStyle(
+        Text(LKeys.feedReportNoteOptional.tr,
+            style: const TextStyle(
                 fontSize: 14, fontWeight: FontWeight.w700, color: cMainText)),
         const SizedBox(height: 6),
         TextField(
@@ -1632,7 +1695,7 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
           enabled: !limited,
           style: const TextStyle(fontSize: 14, color: cMainText),
           decoration: InputDecoration(
-            hintText: '补充更多细节或证据链接（可选）',
+            hintText: LKeys.feedReportDetailsOptional.tr,
             hintStyle: const TextStyle(fontSize: 13, color: cLightText),
             filled: true,
             fillColor: cBG,
@@ -1697,8 +1760,8 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
                 ),
                 GestureDetector(
                   onTap: () => setState(() => _reasonIndex = null),
-                  child: const Text('换个理由',
-                      style: TextStyle(
+                  child: Text(LKeys.feedChangeReason.tr,
+                      style: const TextStyle(
                           fontSize: 12,
                           color: cPrimary,
                           fontWeight: FontWeight.w600)),
@@ -1722,13 +1785,13 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded,
+                      const Icon(Icons.warning_amber_rounded,
                           size: 18, color: _amber),
-                      SizedBox(width: 8),
-                      Text('举报次数已达上限',
-                          style: TextStyle(
+                      const SizedBox(width: 8),
+                      Text(LKeys.feedReportLimitReached.tr,
+                          style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: cMainText)),
@@ -1746,8 +1809,9 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
                           const Icon(Icons.timer_outlined,
                               size: 15, color: _amber),
                           const SizedBox(width: 6),
-                          const Text('距下次可举报还有 ',
-                              style: TextStyle(fontSize: 12, color: cDarkText)),
+                          Text(LKeys.feedReportCooldown.tr,
+                              style: const TextStyle(
+                                  fontSize: 12, color: cDarkText)),
                           Text(
                             _countdownText,
                             style: const TextStyle(
@@ -1784,9 +1848,9 @@ class _ColibriReportSheetState extends State<ColibriReportSheet> {
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2.2, color: Colors.white))
-                  : const Text('发送举报',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  : Text(LKeys.feedSubmitReport.tr,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ),
           const SizedBox(height: 8),

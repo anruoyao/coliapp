@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:untitled/common/api_service/colibri_guest_service.dart';
 import 'package:untitled/common/api_service/colibri_timeline_service.dart';
 import 'package:untitled/common/managers/guest_session.dart';
@@ -8,6 +7,7 @@ import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/colibri_skeleton.dart';
 import 'package:untitled/common/widgets/guest_auth_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_card.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_detail_screen.dart';
@@ -53,6 +53,22 @@ class ColibriFeedController extends GetxController {
   /// 全局重建（维护恢复 / 401 重登等 Get.offAll 场景）后本控制器可能被 GetX
   /// 复用而 activeTab 残留旧值，必须复位，否则切换判定失步、刷新被跳过。
   void syncTab(int index) => activeTab.value = index;
+
+  /// Insert a just-published post into the currently visible feed.
+  void showPublishedPost(ColibriPost post, {required bool following}) {
+    final posts = following ? followingPosts : recommendPosts;
+    if (following) {
+      _followingRequestId++;
+      followingLoading.value = false;
+      followingLoadingMore.value = false;
+    } else {
+      _recommendRequestId++;
+      recommendLoading.value = false;
+      recommendLoadingMore.value = false;
+    }
+    posts.removeWhere((item) => item.id == post.id);
+    posts.insert(0, post);
+  }
 
   /// 本地同步：从两个列表中移除已删除的帖子（另一个 tab 在刷新前也立即消失）。
   void removePostById(int postId) {
@@ -113,20 +129,27 @@ class ColibriFeedController extends GetxController {
       return;
     }
     followingLoadingMore.value = true;
+    final requestId = _followingRequestId;
     final next = _followingPage + 1;
     try {
       final list = await ColibriTimelineService.shared.fetchFeed(page: next);
+      if (requestId != _followingRequestId) return;
       if (list.isEmpty) {
         _followingHasMore = false;
       } else {
         _followingPage = next;
-        followingPosts.addAll(list);
+        final existingIds = followingPosts.map((post) => post.id).toSet();
+        followingPosts.addAll(
+          list.where((post) => existingIds.add(post.id)),
+        );
         if (list.length < pageSize) _followingHasMore = false;
       }
     } catch (_) {
-      _followingHasMore = false;
+      if (requestId == _followingRequestId) _followingHasMore = false;
     } finally {
-      followingLoadingMore.value = false;
+      if (requestId == _followingRequestId) {
+        followingLoadingMore.value = false;
+      }
     }
   }
 
@@ -158,21 +181,28 @@ class ColibriFeedController extends GetxController {
       return;
     }
     recommendLoadingMore.value = true;
+    final requestId = _recommendRequestId;
     final next = _recommendPage + 1;
     try {
       final list =
           await ColibriTimelineService.shared.fetchRecommendFeed(page: next);
+      if (requestId != _recommendRequestId) return;
       if (list.isEmpty) {
         _recommendHasMore = false;
       } else {
         _recommendPage = next;
-        recommendPosts.addAll(list);
+        final existingIds = recommendPosts.map((post) => post.id).toSet();
+        recommendPosts.addAll(
+          list.where((post) => existingIds.add(post.id)),
+        );
         if (list.length < pageSize) _recommendHasMore = false;
       }
     } catch (_) {
-      _recommendHasMore = false;
+      if (requestId == _recommendRequestId) _recommendHasMore = false;
     } finally {
-      recommendLoadingMore.value = false;
+      if (requestId == _recommendRequestId) {
+        recommendLoadingMore.value = false;
+      }
     }
   }
 
@@ -222,13 +252,15 @@ class ColibriFeedScreen extends StatefulWidget {
   const ColibriFeedScreen({super.key});
 
   @override
-  State<ColibriFeedScreen> createState() => _ColibriFeedScreenState();
+  State<ColibriFeedScreen> createState() => ColibriFeedScreenState();
 }
 
-class _ColibriFeedScreenState extends State<ColibriFeedScreen>
+class ColibriFeedScreenState extends State<ColibriFeedScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late final ColibriFeedController _controller;
+  final ScrollController _followingScrollController = ScrollController();
+  final ScrollController _recommendScrollController = ScrollController();
 
   /// 上一次稳定所在的 tab（本地追踪，不依赖可复用的 GetX 控制器状态）。
   int _lastTabIndex = 0;
@@ -245,6 +277,17 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
     _tabController.addListener(_onTabChanged);
   }
 
+  int get selectedFeedTabIndex => _tabController.index;
+
+  void showPublishedPost(ColibriPost post, {required bool following}) {
+    _controller.showPublishedPost(post, following: following);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final scrollController =
+          following ? _followingScrollController : _recommendScrollController;
+      if (scrollController.hasClients) scrollController.jumpTo(0);
+    });
+  }
+
   void _onTabChanged() {
     if (_tabController.index == _lastTabIndex) return;
     _lastTabIndex = _tabController.index;
@@ -255,6 +298,8 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
+    _followingScrollController.dispose();
+    _recommendScrollController.dispose();
     super.dispose();
   }
 
@@ -269,8 +314,8 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
           backgroundColor: cWhite,
           surfaceTintColor: cWhite,
           elevation: 0,
-          title: const Text('精选',
-              style: TextStyle(
+          title: Text(LKeys.feedFeatured.tr,
+              style: const TextStyle(
                   fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         ),
         body: _FeedListTab(
@@ -281,10 +326,10 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
           onRefresh: _controller.loadGuestFeed,
           onLoadMore: _controller.loadMoreGuest,
           onPostRemoved: null,
-          emptyWidget: const ColibriEmptyState(
+          emptyWidget: ColibriEmptyState(
             icon: Icons.explore_rounded,
-            title: '暂时没有公开内容',
-            subtitle: '下拉刷新试一试',
+            title: LKeys.feedEmptyPublicTitle.tr,
+            subtitle: LKeys.feedPullToRefresh.tr,
             topSpacing: 60,
           ),
         ),
@@ -317,9 +362,9 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
               const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           splashFactory: NoSplash.splashFactory,
           dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(text: '关注'),
-            Tab(text: '推荐'),
+          tabs: [
+            Tab(text: LKeys.feedFollow.tr),
+            Tab(text: LKeys.feedForYou.tr),
           ],
         ),
       ),
@@ -331,6 +376,7 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
             loading: _controller.followingLoading,
             loadingMore: _controller.followingLoadingMore,
             posts: _controller.followingPosts,
+            scrollController: _followingScrollController,
             pinnedPosts: _controller.pinnedPosts,
             onRefresh: _controller.loadFollowing,
             onLoadMore: _controller.loadMoreFollowing,
@@ -342,6 +388,7 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
             loading: _controller.recommendLoading,
             loadingMore: _controller.recommendLoadingMore,
             posts: _controller.recommendPosts,
+            scrollController: _recommendScrollController,
             pinnedPosts: _controller.pinnedPosts,
             onRefresh: _controller.loadRecommend,
             onLoadMore: _controller.loadMoreRecommend,
@@ -356,11 +403,11 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
   Widget _buildFollowingEmpty(BuildContext context) {
     return ColibriEmptyState(
       icon: Icons.group_add_rounded,
-      title: '还没有关注的帖子',
-      subtitle: '关注作者，或在推荐里发现更多内容',
+      title: LKeys.feedEmptyFollowingTitle.tr,
+      subtitle: LKeys.feedEmptyFollowingDesc.tr,
       topSpacing: 60,
       action: ColibriPillButton(
-        text: '发现用户',
+        text: LKeys.feedFindPeople.tr,
         icon: Icons.explore_rounded,
         filled: true,
         height: 42,
@@ -370,56 +417,118 @@ class _ColibriFeedScreenState extends State<ColibriFeedScreen>
   }
 
   Widget _buildRecommendEmpty() {
-    return const ColibriEmptyState(
+    return ColibriEmptyState(
       icon: Icons.explore_rounded,
-      title: '暂时没有推荐内容',
-      subtitle: '下拉刷新试一试',
+      title: LKeys.feedEmptyRecommendTitle.tr,
+      subtitle: LKeys.feedPullToRefresh.tr,
       topSpacing: 60,
     );
   }
 }
 
-class GlassCreateButton extends StatelessWidget {
+class ColibriCreateButton extends StatefulWidget {
   final VoidCallback onPressed;
 
-  const GlassCreateButton({super.key, required this.onPressed});
+  const ColibriCreateButton({super.key, required this.onPressed});
+
+  @override
+  State<ColibriCreateButton> createState() => _ColibriCreateButtonState();
+}
+
+class _ColibriCreateButtonState extends State<ColibriCreateButton> {
+  static const double _buttonWidth = 112;
+  static const double _buttonHeight = 48;
+  static const double _buttonRadius = 24;
+
+  bool _pressed = false;
+  bool _launching = false;
+
+  void _handleTap() {
+    if (_launching) return;
+    HapticManager.shared.medium();
+    setState(() {
+      _pressed = false;
+      _launching = true;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 90), () {
+      if (mounted) widget.onPressed();
+    });
+    Future<void>.delayed(const Duration(milliseconds: 460), () {
+      if (mounted) setState(() => _launching = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: cBlack.withValues(alpha: 0.22),
-              blurRadius: 20,
-              offset: const Offset(0, 7)),
-        ],
-      ),
-      child: SizedBox(
-        width: 56,
-        height: 56,
-        child: LiquidGlassLens(
-          style: const LiquidGlassStyle(
-            shape: LiquidGlassShape.squircle(
-              cornerRadius: 20,
-              clipQuality: LiquidGlassClipQuality.exact,
-              borderWidth: 1.1,
-              borderColor: Color(0xFFB8BCC4),
-              lightIntensity: 1.3,
-              lightDirection: 80,
+    return Semantics(
+      button: true,
+      label: LKeys.feedCreatePostLabel.tr,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) {
+          if (!_launching) setState(() => _pressed = true);
+        },
+        onTapCancel: () {
+          if (_pressed) setState(() => _pressed = false);
+        },
+        onTap: _handleTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.95 : (_launching ? 1.04 : 1),
+          duration: Duration(milliseconds: _pressed ? 110 : 260),
+          curve: Curves.easeOutCubic,
+          child: SizedBox(
+            width: _buttonWidth,
+            height: _buttonHeight,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xF7FFFFFF),
+                    borderRadius: BorderRadius.circular(_buttonRadius),
+                    border: Border.all(color: const Color(0xFFE2E5EA)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cBlack.withValues(alpha: _pressed ? 0.12 : 0.2),
+                        blurRadius: _pressed ? 8 : 14,
+                        offset: Offset(0, _pressed ? 2 : 5),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    width: _buttonWidth,
+                    height: _buttonHeight,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(scale: animation, child: child),
+                          child: Icon(
+                            _launching ? Icons.edit_rounded : Icons.add_rounded,
+                            key: ValueKey(_launching),
+                            color: cPrimary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          LKeys.feedPublish.tr,
+                          style: const TextStyle(
+                            color: cPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            appearance: LiquidGlassAppearance(color: Color(0xF2FFFFFF)),
-            refraction: LiquidGlassRefraction(
-              distortion: 0.16,
-              distortionWidth: 28,
-              chromaticAberration: 0.0025,
-            ),
-          ),
-          child: IconButton(
-            onPressed: onPressed,
-            icon: const Icon(Icons.edit_rounded, color: cPrimary, size: 23),
-            tooltip: '发布',
           ),
         ),
       ),
@@ -612,6 +721,7 @@ class _FeedListTab extends StatelessWidget {
 
   final Future<void> Function() onRefresh;
   final Future<void> Function() onLoadMore;
+  final ScrollController? scrollController;
 
   /// 帖子被删除后的本地同步（从两个列表中移除）。
   final void Function(int postId)? onPostRemoved;
@@ -627,6 +737,7 @@ class _FeedListTab extends StatelessWidget {
     required this.leading,
     required this.onRefresh,
     required this.onLoadMore,
+    this.scrollController,
     this.onPostRemoved,
     required this.emptyWidget,
     this.pinnedPosts,
@@ -680,6 +791,7 @@ class _FeedListTab extends StatelessWidget {
                   return false;
                 },
                 child: ListView.separated(
+                  controller: scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: 1 +
                       visiblePins.length +
@@ -761,9 +873,7 @@ class _FeedListTab extends StatelessWidget {
   }
 }
 
-/// 访客态 Feed 顶部登录引导卡（替代故事条）。
-///
-/// 品牌绿渐变卡片：编辑图标 + 引导文案 + 登录胶囊；整卡可点唤起登录面板。
+/// Translucent sign-in prompt shown above the public guest feed.
 class _GuestGuideCard extends StatelessWidget {
   const _GuestGuideCard();
 
@@ -771,75 +881,59 @@ class _GuestGuideCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          HapticManager.shared.selection();
-          openAuthSheet();
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            // 同色系纵向微渐变（受光感），避免高饱和跨色对角渐变的合成感
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF14804A), Color(0xFF0B6B3B)],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Material(
+          color: const Color(0xFFFFFFFF),
+          child: InkWell(
+            onTap: () {
+              HapticManager.shared.selection();
+              openAuthSheet();
+            },
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 76),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE4E6EA)),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_outlined,
+                      size: 22, color: Color(0xFF1D1D1F)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(LKeys.feedGuestPostPrompt.tr,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cMainText)),
+                        const SizedBox(height: 3),
+                        Text(LKeys.feedGuestFollowPrompt.tr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12, color: cLightText)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(LKeys.commonSignIn.tr,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ],
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.edit_rounded,
-                    color: Color(0xFF0B6B3B), size: 21),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('登录后发布你的动态',
-                        style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white)),
-                    SizedBox(height: 3),
-                    Text('还可关注作者、点赞评论与私信互动',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: Colors.white70)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text('登录',
-                    style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0B6B3B))),
-              ),
-            ],
           ),
         ),
       ),

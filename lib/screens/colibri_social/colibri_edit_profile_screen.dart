@@ -12,6 +12,7 @@ import 'package:untitled/common/managers/session_manager.dart';
 import 'package:untitled/common/managers/upload_limits_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 编辑资料：对齐网页 settings/account-settings 的功能与字段。
@@ -124,7 +125,7 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
     final msg = await UploadLimitsService.shared
         .check(File(file.path).lengthSync(), 'image');
     if (msg != null) {
-      showColibriToast('图片过大',
+      showColibriToast(LKeys.commonImageTooLarge.tr,
           message: msg, backgroundColor: cRed, colorText: Colors.white);
       return;
     }
@@ -191,12 +192,14 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
       await _refreshCache().catchError((_) {});
       if (mounted) {
         Get.back();
-        showColibriToast('已保存',
-            message: '资料已更新', backgroundColor: cGreen, colorText: Colors.white);
+        showColibriToast(LKeys.settingsSaved.tr,
+            message: LKeys.editProfileUpdated.tr,
+            backgroundColor: cGreen,
+            colorText: Colors.white);
       }
     } catch (e) {
       if (mounted) {
-        showColibriToast('保存失败',
+        showColibriToast(LKeys.settingsSaveFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
             colorText: Colors.white);
@@ -245,8 +248,8 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                       color: cLightBg, borderRadius: BorderRadius.circular(2)),
                 ),
                 const SizedBox(height: 12),
-                const Text('选择生日',
-                    style: TextStyle(
+                Text(LKeys.editProfileSelectBirthdate.tr,
+                    style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: cMainText)),
@@ -266,7 +269,9 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                           children: [
                             for (final y in years)
                               Center(
-                                  child: Text('$y 年',
+                                  child: Text(
+                                      LKeys.editProfileYearLabel
+                                          .trParams({'p1': '$y'}),
                                       style: const TextStyle(
                                           fontSize: 16, color: cMainText)))
                           ],
@@ -284,7 +289,9 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                           children: [
                             for (final m in List.generate(12, (i) => i + 1))
                               Center(
-                                  child: Text('$m 月',
+                                  child: Text(
+                                      LKeys.editProfileMonthLabel
+                                          .trParams({'p1': '$m'}),
                                       style: const TextStyle(
                                           fontSize: 16, color: cMainText))),
                           ],
@@ -303,7 +310,9 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                           children: [
                             for (final d in List.generate(days, (i) => i + 1))
                               Center(
-                                  child: Text('$d 日',
+                                  child: Text(
+                                      LKeys.editProfileDayLabel
+                                          .trParams({'p1': '$d'}),
                                       style: const TextStyle(
                                           fontSize: 16, color: cMainText))),
                           ],
@@ -315,7 +324,7 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
                   child: ColibriPillButton(
-                    text: '确定',
+                    text: LKeys.editProfileConfirm.tr,
                     filled: true,
                     height: 48,
                     radius: 16,
@@ -366,8 +375,8 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                         borderRadius: BorderRadius.circular(2)),
                   ),
                   const SizedBox(height: 12),
-                  const Text('选择国家',
-                      style: TextStyle(
+                  Text(LKeys.editProfileSelectCountry.tr,
+                      style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: cMainText)),
@@ -377,7 +386,7 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                       autofocus: false,
                       onChanged: (v) => setSheet(() => query = v.trim()),
                       decoration: InputDecoration(
-                        hintText: '搜索国家',
+                        hintText: LKeys.editProfileSearchCountry.tr,
                         hintStyle:
                             const TextStyle(color: cLightText, fontSize: 14),
                         prefixIcon: const Icon(Icons.search_rounded,
@@ -395,10 +404,10 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                   ),
                   Expanded(
                     child: filtered.isEmpty
-                        ? const Center(
-                            child: Text('没有匹配的国家',
-                                style:
-                                    TextStyle(color: cLightText, fontSize: 14)))
+                        ? Center(
+                            child: Text(LKeys.editProfileNoMatchingCountries.tr,
+                                style: const TextStyle(
+                                    color: cLightText, fontSize: 14)))
                         : ListView.builder(
                             itemCount: filtered.length,
                             itemBuilder: (ctx, i) {
@@ -459,7 +468,8 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
   String get _birthdateText {
     if (_birthYear == null || _birthMonth == null || _birthDay == null)
       return '';
-    return '${_birthYear}年${_birthMonth}月${_birthDay}日';
+    return LKeys.editProfileBirthdateValue.trParams(
+        {'p1': '${_birthYear}', 'p2': '${_birthMonth}', 'p3': '${_birthDay}'});
   }
 
   String get _countryLabel {
@@ -478,8 +488,8 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
           backgroundColor: cWhite,
           surfaceTintColor: cWhite,
           elevation: 0,
-          title: const Text('编辑资料',
-              style: TextStyle(
+          title: Text(LKeys.socialEditProfile.tr,
+              style: const TextStyle(
                   fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         ),
         body: const Center(child: CircularProgressIndicator(color: cPrimary)),
@@ -491,14 +501,15 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: const Text('编辑资料',
-            style: TextStyle(
+        title: Text(LKeys.socialEditProfile.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
-            child: Text(_saving ? '保存中...' : '保存',
+            child: Text(
+                _saving ? LKeys.editProfileSaving.tr : LKeys.editProfileSave.tr,
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -515,34 +526,34 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
           // 头像
           Center(child: _avatarEditor()),
           const SizedBox(height: 26),
-          const ColibriSectionLabel('基本资料'),
+          ColibriSectionLabel(LKeys.editProfileBasicInfo.tr),
           _buildField(
-            label: '用户名 *',
-            helper: '用户名只能包含拉丁字母、数字、点和下划线，全站唯一，用于登录和@。',
+            label: LKeys.editProfileUsernameLabel.tr,
+            helper: LKeys.editProfileUsernameHint.tr,
             child: TextField(
                 controller: _username, decoration: _fieldDecoration()),
           ),
           _buildField(
-            label: '个人标签',
-            helper: '头衔是描述你账号的短标签，会显示在你的姓名附近。例如：「软件工程师」「摄影师」「学生」等。',
+            label: LKeys.editProfileTaglineLabel.tr,
+            helper: LKeys.editProfileTaglineHint.tr,
             child:
                 TextField(controller: _caption, decoration: _fieldDecoration()),
           ),
           _buildField(
-            label: '名字 *',
-            helper: '你的称呼（昵称），会显示在个人主页和帖子旁，必填（≥2字符）。',
+            label: LKeys.editProfileNameLabel.tr,
+            helper: LKeys.editProfileNameHint.tr,
             child: TextField(
                 controller: _firstName, decoration: _fieldDecoration()),
           ),
           _buildField(
-            label: '姓氏',
-            helper: '提供你的姓氏或家族名；如果没有可留空。',
+            label: LKeys.editProfileLastNameLabel.tr,
+            helper: LKeys.editProfileLastNameHint.tr,
             child: TextField(
                 controller: _lastName, decoration: _fieldDecoration()),
           ),
           _buildField(
-            label: '简介',
-            helper: '一段自我介绍，会显示在个人主页（最多240字）。',
+            label: LKeys.editProfileBioLabel.tr,
+            helper: LKeys.editProfileBioHint.tr,
             child: TextField(
                 controller: _bio,
                 maxLines: 4,
@@ -550,8 +561,8 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                 decoration: _fieldDecoration()),
           ),
           _buildField(
-            label: '网站',
-            helper: '个人主页上展示的外部链接（须为合法URL）。',
+            label: LKeys.editProfileWebsiteLabel.tr,
+            helper: LKeys.editProfileWebsiteHint.tr,
             child: TextField(
               controller: _website,
               keyboardType: TextInputType.url,
@@ -559,25 +570,25 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
             ),
           ),
           _buildField(
-            label: '性别',
-            helper: '可选，会显示在个人主页的「信息」里。',
+            label: LKeys.socialGender.tr,
+            helper: LKeys.editProfileGenderHint.tr,
             child: _genderSelector(),
           ),
           const SizedBox(height: 10),
-          const ColibriSectionLabel('个人信息'),
+          ColibriSectionLabel(LKeys.editProfilePersonalInfo.tr),
           _buildField(
-            label: '生日',
-            helper: '可选，只用于显示年龄，你可以在「信息」页设置是否公开。',
+            label: LKeys.socialBirthday.tr,
+            helper: LKeys.editProfileBirthdateHint.tr,
             child: _birthdateSelector(),
           ),
           _buildField(
-            label: '国家',
-            helper: '可选，用于显示所在地。',
+            label: LKeys.editProfileCountryLabel.tr,
+            helper: LKeys.editProfileCountryHint.tr,
             child: _countrySelector(),
           ),
           _buildField(
-            label: '城市',
-            helper: '可选，配合国家一起展示。',
+            label: LKeys.editProfileCityLabel.tr,
+            helper: LKeys.editProfileCityHint.tr,
             child: TextField(
               controller: _cityController,
               onChanged: (v) => _city = v,
@@ -627,7 +638,7 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
   Widget _birthdateSelector() {
     return _pickerField(
       value: _birthdateText,
-      hint: '选择生日',
+      hint: LKeys.editProfileSelectBirthdate.tr,
       onTap: _showBirthdatePicker,
     );
   }
@@ -635,7 +646,7 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
   Widget _countrySelector() {
     return _pickerField(
       value: _countryLabel,
-      hint: '选择国家',
+      hint: LKeys.editProfileSelectCountry.tr,
       onTap: _showCountryPicker,
     );
   }
@@ -689,7 +700,9 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
                       color: Colors.white, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    _coverPath != null ? '已选择新封面，保存后生效' : '点击更换封面横幅',
+                    _coverPath != null
+                        ? LKeys.editProfileNewCoverSelected.tr
+                        : LKeys.editProfileChangeCover.tr,
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12.5,
@@ -759,9 +772,9 @@ class _ColibriEditProfileScreenState extends State<ColibriEditProfileScreen> {
 
   Widget _genderSelector() {
     final options = [
-      ('male', '男'),
-      ('female', '女'),
-      ('not-specified', '不指定'),
+      ('male', LKeys.editProfileMale.tr),
+      ('female', LKeys.editProfileFemale.tr),
+      ('not-specified', LKeys.editProfileNotSpecified.tr),
     ];
     return Wrap(
       spacing: 10,

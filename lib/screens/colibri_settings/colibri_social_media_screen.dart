@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_settings_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_settings_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -67,12 +68,12 @@ class _ColibriSocialMediaScreenState extends State<ColibriSocialMediaScreen> {
         };
       }).toList();
       await ColibriSettingsService.shared.updateSocialLinks(links);
-      showColibriToast('已保存',
-          message: '社交媒体链接已更新',
+      showColibriToast(LKeys.settingsSaved.tr,
+          message: LKeys.settingsSocialLinksUpdated.tr,
           backgroundColor: cGreen,
           colorText: Colors.white);
     } catch (e) {
-      showColibriToast('保存失败',
+      showColibriToast(LKeys.settingsSaveFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -88,8 +89,9 @@ class _ColibriSocialMediaScreenState extends State<ColibriSocialMediaScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('社交媒体',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.settingsSocialMedia.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: _loading
@@ -98,7 +100,7 @@ class _ColibriSocialMediaScreenState extends State<ColibriSocialMediaScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('填写各平台的个人主页链接，会显示在你的个人简介中。',
+                  child: Text(LKeys.settingsSocialLinksDescription.tr,
                       style: const TextStyle(fontSize: 13, color: cLightText)),
                 ),
                 ...(_links ?? []).map((l) {

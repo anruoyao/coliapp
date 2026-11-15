@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_social_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 import 'package:untitled/screens/colibri_social/colibri_profile_screen.dart';
 import 'package:untitled/utilities/const.dart';
@@ -24,8 +25,12 @@ class ColibriConnectionsScreen extends StatefulWidget {
 }
 
 class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
+  /// 与服务端 `take(30)` 一致：返回不满一页即说明已到末尾。
+  static const int _pageSize = 30;
+
   final List<ColibriPeople> _people = [];
   bool _loading = true;
+  bool _loadingMore = false;
   int? _cursor;
 
   @override
@@ -43,7 +48,7 @@ class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
         _people
           ..clear()
           ..addAll(list);
-        _cursor = list.isNotEmpty ? list.last.id : null;
+        _cursor = _nextCursor(list);
       });
     } catch (_) {
     } finally {
@@ -51,26 +56,38 @@ class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
     }
   }
 
+  /// 下一页游标 = 最后一条的「关注记录 id」（cursor_id），不是用户 id。
+  /// 不满一页 / cursor_id 缺失时返回 null，停止继续加载，避免同一页无限重复。
+  int? _nextCursor(List<ColibriPeople> list) {
+    if (list.length < _pageSize) return null;
+    return list.last.cursorId;
+  }
+
   Future<void> _loadMore() async {
-    if (_cursor == null) return;
+    if (_cursor == null || _loadingMore) return;
+    _loadingMore = true;
     try {
       final list = await ColibriSocialService.shared.fetchConnections(
           widget.userId,
           following: widget.following,
           cursor: _cursor);
+      if (!mounted) return;
       setState(() {
         _people.addAll(list);
-        _cursor = list.isNotEmpty ? list.last.id : null;
+        _cursor = _nextCursor(list);
       });
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   Future<void> _toggleFollow(ColibriPeople p) async {
     try {
       final result = await ColibriSocialService.shared.toggleFollow(p.id);
       if (result.requested) {
-        showColibriToast('已发送关注请求',
-            message: '等待对方批准',
+        showColibriToast(LKeys.socialFollowRequestSent.tr,
+            message: LKeys.socialPendingApproval.tr,
             backgroundColor: cPrimary,
             colorText: Colors.white);
       }
@@ -80,6 +97,7 @@ class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
         if (idx != -1) {
           _people[idx] = ColibriPeople(
             id: p.id,
+            cursorId: p.cursorId,
             name: p.name,
             username: p.username,
             avatarUrl: p.avatarUrl,
@@ -110,8 +128,9 @@ class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: cPrimary))
           : _people.isEmpty
-              ? const Center(
-                  child: Text('暂无', style: TextStyle(color: cLightText)))
+              ? Center(
+                  child: Text(LKeys.profileNoneYet.tr,
+                      style: const TextStyle(color: cLightText)))
               : NotificationListener<ScrollNotification>(
                   onNotification: (n) {
                     if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200)
@@ -165,7 +184,10 @@ class _ColibriConnectionsScreenState extends State<ColibriConnectionsScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14),
                                 ),
-                                child: Text(p.isFollowing ? '已关注' : '关注',
+                                child: Text(
+                                    p.isFollowing
+                                        ? LKeys.socialFollowing.tr
+                                        : LKeys.feedFollow.tr,
                                     style: const TextStyle(fontSize: 13)),
                               ),
                         onTap: () => Get.to(

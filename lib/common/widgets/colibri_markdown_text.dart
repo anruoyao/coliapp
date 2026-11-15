@@ -1,8 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_social/colibri_profile_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -110,7 +112,7 @@ class _ColibriMarkdownTextState extends State<ColibriMarkdownText> {
   /// `\S(?:.*?\S)?` 约束首尾非空白（模拟 CommonMark 的 flanking 规则，
   /// 避免把 `* 列表项 *` 之类误渲染为斜体）。
   static final RegExp _masterRegex = RegExp(
-    '`(?<code>[^`\\n]+)`'
+    r'``(?<codeBlock>[^`\n]+)``|`(?<code>[^`\n]+)`'
     r'|!\[(?<imgAlt>[^\]]*)\]\((?<imgUrl>[^)\s]+)\)'
     r'|\[(?<linkText>[^\]]+)\]\((?<linkUrl>[^)\s]+)\)'
     r'|(?:\*\*\*(?<bi1>\S(?:.*?\S)?)\*\*\*|___(?<bi2>\S(?:.*?\S)?)___)'
@@ -140,9 +142,9 @@ class _ColibriMarkdownTextState extends State<ColibriMarkdownText> {
             TextSpan(text: content.substring(last, m.start), style: baseStyle));
       }
 
-      final named = (String name) => m.namedGroup(name);
+      String? named(String name) => m.namedGroup(name);
 
-      final code = named('code');
+      final code = named('codeBlock') ?? named('code');
       final imgAlt = named('imgAlt');
       final imgUrl = named('imgUrl');
       final linkText = named('linkText');
@@ -167,12 +169,7 @@ class _ColibriMarkdownTextState extends State<ColibriMarkdownText> {
           ),
         ));
       } else if (imgUrl != null) {
-        // 图片语法：以链接形式展示（描述或网址），点击外部打开
-        spans.add(_buildLinkSpan(
-            (imgAlt == null || imgAlt.isEmpty) ? imgUrl : imgAlt,
-            imgUrl,
-            baseStyle,
-            prefix: '🖼 '));
+        spans.add(_buildImageSpan(imgAlt ?? '', imgUrl));
       } else if (linkUrl != null && linkText != null) {
         spans.add(_buildLinkSpan(linkText, linkUrl, baseStyle));
       } else if (boldItalic != null) {
@@ -239,6 +236,40 @@ class _ColibriMarkdownTextState extends State<ColibriMarkdownText> {
     return spans.isEmpty ? [TextSpan(text: '', style: baseStyle)] : spans;
   }
 
+  WidgetSpan _buildImageSpan(String alt, String url) {
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Semantics(
+        image: true,
+        label: alt.isEmpty ? LKeys.commonPostImage.tr : alt,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 240),
+            child: AspectRatio(
+              aspectRatio: 3 / 2,
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => const ColoredBox(
+                  color: cLightBg,
+                  child:
+                      Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+                errorWidget: (context, url, error) => const ColoredBox(
+                  color: cLightBg,
+                  child: Center(
+                    child: Icon(Icons.broken_image_outlined, color: cLightText),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 可点击链接 span（品牌绿，对齐网页 .markdown-text a）。
   InlineSpan _buildLinkSpan(String text, String url, TextStyle baseStyle,
       {String prefix = ''}) {
@@ -268,34 +299,128 @@ class _ColibriMarkdownTextState extends State<ColibriMarkdownText> {
   }
 }
 
-/// 文本格式速查面板（对齐网页端 MarkdownCheatSheet：格式名 + 语法示例）。
-void showMarkdownCheatSheet(BuildContext context) {
-  const groups = <({
-    String title,
-    List<({IconData icon, String name, String syntax})> items
-  })>[
-    (
-      title: '文本格式',
-      items: [
-        (icon: Icons.format_bold_rounded, name: '粗体', syntax: '**文本**'),
-        (icon: Icons.format_italic_rounded, name: '斜体', syntax: '*文本*'),
-        (icon: Icons.strikethrough_s_rounded, name: '删除线', syntax: '~~文本~~'),
-        (icon: Icons.format_italic_rounded, name: '粗体加斜体', syntax: '***文本***'),
-        (icon: Icons.format_underline_rounded, name: '下划线', syntax: '++文本++'),
-        (icon: Icons.brush_rounded, name: '高亮', syntax: '::文本::'),
-      ],
-    ),
-    (
-      title: '块级格式',
-      items: [
-        (icon: Icons.code_rounded, name: '行内代码', syntax: '`代码`'),
-        (icon: Icons.link_rounded, name: '链接', syntax: '[文字](网址)'),
-        (icon: Icons.image_rounded, name: '图片链接', syntax: '![描述](图片网址)'),
-      ],
-    ),
-  ];
+class MarkdownFormatPreset {
+  final IconData icon;
+  final String name;
+  final String syntax;
+  final String template;
+  final String selectionText;
 
-  showColibriBottomSheet<void>(
+  const MarkdownFormatPreset({
+    required this.icon,
+    required this.name,
+    required this.syntax,
+    required this.template,
+    required this.selectionText,
+  });
+}
+
+List<({String title, List<MarkdownFormatPreset> items})>
+    get markdownFormatGroups => [
+          (
+            title: LKeys.commonTextFormatting.tr,
+            items: [
+              MarkdownFormatPreset(
+                  icon: Icons.format_bold_rounded,
+                  name: LKeys.commonBold.tr,
+                  syntax: LKeys.commonBoldSample.tr,
+                  template: LKeys.commonBoldSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.format_italic_rounded,
+                  name: LKeys.commonItalic.tr,
+                  syntax: LKeys.commonItalicSample.tr,
+                  template: LKeys.commonItalicSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.strikethrough_s_rounded,
+                  name: LKeys.commonStrikethrough.tr,
+                  syntax: LKeys.commonStrikethroughSample.tr,
+                  template: LKeys.commonStrikethroughSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.format_italic_rounded,
+                  name: LKeys.commonBoldItalic.tr,
+                  syntax: LKeys.commonBoldItalicSample.tr,
+                  template: LKeys.commonBoldItalicSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.format_underline_rounded,
+                  name: LKeys.commonUnderline.tr,
+                  syntax: LKeys.commonUnderlineSample.tr,
+                  template: LKeys.commonUnderlineSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.brush_rounded,
+                  name: LKeys.commonHighlight.tr,
+                  syntax: LKeys.commonHighlightSample.tr,
+                  template: LKeys.commonHighlightSample.tr,
+                  selectionText: LKeys.commonTextSample.tr),
+            ],
+          ),
+          (
+            title: LKeys.commonBlockFormatting.tr,
+            items: [
+              MarkdownFormatPreset(
+                  icon: Icons.code_rounded,
+                  name: LKeys.commonCode.tr,
+                  syntax: LKeys.commonCodeSample.tr,
+                  template: LKeys.commonCodeSample.tr,
+                  selectionText: LKeys.commonCode.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.link_rounded,
+                  name: LKeys.commonLink.tr,
+                  syntax: LKeys.commonLinkSyntax.tr,
+                  template: LKeys.commonLinkSyntax.tr,
+                  selectionText: LKeys.commonLinkText.tr),
+              MarkdownFormatPreset(
+                  icon: Icons.image_rounded,
+                  name: LKeys.commonImageLink.tr,
+                  syntax: '![alt text](image-url.png)',
+                  template: '![alt text](image-url.png)',
+                  selectionText: 'alt text'),
+            ],
+          ),
+        ];
+
+/// Inserts a Markdown template at the current selection and selects its placeholder.
+void applyMarkdownFormatPreset(
+    TextEditingController controller, MarkdownFormatPreset preset) {
+  final value = controller.value;
+  final selection = value.selection;
+  final hasValidSelection = selection.isValid &&
+      selection.start <= value.text.length &&
+      selection.end <= value.text.length;
+  final start = hasValidSelection ? selection.start : value.text.length;
+  final end = hasValidSelection ? selection.end : value.text.length;
+  final selectedText = value.text.substring(start, end);
+  final placeholderStart = preset.template.indexOf(preset.selectionText);
+  final replacement = selectedText.isEmpty
+      ? preset.template
+      : preset.template.replaceRange(
+          placeholderStart,
+          placeholderStart + preset.selectionText.length,
+          selectedText,
+        );
+  final nextText = value.text.replaceRange(start, end, replacement);
+  final selectedStart = start + placeholderStart;
+  final selectedLength =
+      selectedText.isEmpty ? preset.selectionText.length : selectedText.length;
+  controller.value = TextEditingValue(
+    text: nextText,
+    selection: TextSelection(
+      baseOffset: selectedStart,
+      extentOffset: selectedStart + selectedLength,
+    ),
+  );
+}
+
+/// Interactive Markdown quick sheet; selecting a row inserts its template.
+Future<void> showMarkdownCheatSheet(
+  BuildContext context, {
+  required ValueChanged<MarkdownFormatPreset> onSelected,
+}) async {
+  final preset = await showColibriBottomSheet<MarkdownFormatPreset>(
     SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -308,19 +433,19 @@ void showMarkdownCheatSheet(BuildContext context) {
                 color: cLightBg, borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 12),
-          const Text('文本格式',
-              style: TextStyle(
+          Text(LKeys.commonTextFormatting.tr,
+              style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.w800, color: cMainText)),
           const SizedBox(height: 4),
-          const Text('发帖时使用以下语法为文本添加格式',
-              style: TextStyle(fontSize: 12, color: cLightText)),
+          Text(LKeys.commonMarkdownHint.tr,
+              style: const TextStyle(fontSize: 12, color: cLightText)),
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final (:title, :items) in groups) ...[
+                  for (final (:title, :items) in markdownFormatGroups) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 8, bottom: 4),
                       child: Text(title,
@@ -329,23 +454,30 @@ void showMarkdownCheatSheet(BuildContext context) {
                               fontWeight: FontWeight.w700,
                               color: cGreen)),
                     ),
-                    for (final (:icon, :name, :syntax) in items)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        child: Row(
-                          children: [
-                            Icon(icon, size: 20, color: cMainText),
-                            const SizedBox(width: 10),
-                            Expanded(
-                                child: Text(name,
+                    for (final preset in items)
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).pop(preset),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              children: [
+                                Icon(preset.icon, size: 20, color: cMainText),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(preset.name,
+                                      style: const TextStyle(
+                                          fontSize: 14.5, color: cMainText)),
+                                ),
+                                Text(preset.syntax,
                                     style: const TextStyle(
-                                        fontSize: 14.5, color: cMainText))),
-                            Text(syntax,
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    color: cLightText,
-                                    fontFamily: 'monospace')),
-                          ],
+                                        fontSize: 13,
+                                        color: cLightText,
+                                        fontFamily: 'monospace')),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -364,4 +496,5 @@ void showMarkdownCheatSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
   );
+  if (preset != null) onSelected(preset);
 }

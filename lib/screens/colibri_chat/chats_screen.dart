@@ -9,6 +9,7 @@ import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_chat_models.dart';
 import 'package:untitled/screens/colibri_chat/chat_detail_screen.dart';
 import 'package:untitled/screens/colibri_chat/chat_requests_screen.dart';
@@ -140,8 +141,8 @@ class ColibriChatsScreen extends StatelessWidget {
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: const Text('聊天',
-            style: TextStyle(
+        title: Text(LKeys.commonChats.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         actions: [
           // 群邀请 / 陌生人请求入口（带未处理数 badge）
@@ -183,11 +184,11 @@ class ColibriChatsScreen extends StatelessWidget {
             onRefresh: controller.refreshSilently,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
+              children: [
                 ColibriEmptyState(
                   icon: Icons.chat_bubble_outline_rounded,
-                  title: '暂无会话',
-                  subtitle: '从个人主页发起私信，或创建群聊',
+                  title: LKeys.chatNoConversations.tr,
+                  subtitle: LKeys.chatNoConversationsDesc.tr,
                   topSpacing: 70,
                 ),
               ],
@@ -240,7 +241,7 @@ class ColibriChatsScreen extends StatelessWidget {
         await action();
         controller.refreshSilently();
       } catch (e) {
-        showColibriToast('操作失败',
+        showColibriToast(LKeys.commonActionFailed.tr,
             message: e.toString(),
             backgroundColor: cRed,
             colorText: Colors.white);
@@ -249,24 +250,24 @@ class ColibriChatsScreen extends StatelessWidget {
 
     showColibriSheet(
       context,
-      title: '会话操作',
+      title: LKeys.chatConversationActions.tr,
       items: [
         ColibriSheetItem(
           icon: Icons.archive_outlined,
-          label: '归档',
-          subtitle: '从列表移出，归档后可恢复',
+          label: LKeys.chatArchive.tr,
+          subtitle: LKeys.chatArchiveDesc.tr,
           onTap: () => run(
               () => ColibriMessengerService.shared.archiveChat(chat.chatId)),
         ),
         ColibriSheetItem(
           icon: Icons.delete_sweep_outlined,
-          label: '清空聊天记录',
+          label: LKeys.chatClearHistory.tr,
           onTap: () => run(() =>
               ColibriMessengerService.shared.clearConversation(chat.chatId)),
         ),
         ColibriSheetItem(
           icon: Icons.delete_outline_rounded,
-          label: '删除会话',
+          label: LKeys.chatDeleteConversation.tr,
           danger: true,
           onTap: () =>
               run(() => ColibriMessengerService.shared.deleteChat(chat.chatId)),
@@ -334,7 +335,8 @@ class _ChatTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    chat.lastMessage ?? (chat.isDeleted ? '消息已删除' : ''),
+                    chat.lastMessage ??
+                        (chat.isDeleted ? LKeys.chatMessageDeleted.tr : ''),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -366,7 +368,8 @@ class _ChatTile extends StatelessWidget {
                       chat.unreadCountFormatted,
                       style: const TextStyle(
                           fontSize: 11,
-                          color: cBlack,
+                          // 未读数气泡为深色底，数字必须用白色（cBlack 会黑底黑字看不见）
+                          color: Colors.white,
                           fontWeight: FontWeight.w800),
                     ),
                   ),

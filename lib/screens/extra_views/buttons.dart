@@ -57,21 +57,27 @@ class CommonSheetButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        alignment: Alignment.center,
-        margin: const EdgeInsets.only(bottom: 30),
-        decoration: ShapeDecoration(
-            shape: const SmoothRectangleBorder(
-                borderRadius: SmoothBorderRadius.all(SmoothRadius(
-                    cornerRadius: 12, cornerSmoothing: cornerSmoothing))),
-            color: color ?? cWhite),
-        height: 50,
-        width: double.infinity,
-        child: Text(
-          title.tr,
-          style: MyTextStyle.gilroySemiBold(color: textColor ?? cBlack),
+    final borderRadius = SmoothBorderRadius.all(
+      SmoothRadius(cornerRadius: 12, cornerSmoothing: cornerSmoothing),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 30),
+      child: Material(
+        color: color ?? cWhite,
+        shape: SmoothRectangleBorder(borderRadius: borderRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 50,
+            width: double.infinity,
+            child: Center(
+              child: Text(
+                title.tr,
+                style: MyTextStyle.gilroySemiBold(color: textColor ?? cBlack),
+              ),
+            ),
+          ),
         ),
       ),
     );

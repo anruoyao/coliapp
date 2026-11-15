@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 enum ColibriToastStatus { info, error, success }
@@ -23,6 +24,7 @@ void showColibriToast(
   Color? backgroundColor,
   Color? colorText,
   Duration duration = const Duration(milliseconds: 2500),
+  bool frosted = false,
 }) {
   final resolvedStatus = backgroundColor == cRed
       ? ColibriToastStatus.error
@@ -46,6 +48,7 @@ void showColibriToast(
       status: resolvedStatus,
       icon: icon,
       duration: duration,
+      frosted: frosted,
       onDismiss: () {
         if (entry.mounted) entry.remove();
         if (identical(_activeToast, entry)) _activeToast = null;
@@ -60,7 +63,7 @@ void showColibriToast(
 void showColibriBookmarkToast(BuildContext context,
     {required bool bookmarked}) {
   showColibriToast(
-    bookmarked ? '已添加到收藏' : '已取消收藏',
+    bookmarked ? LKeys.commonAddedToSaved.tr : LKeys.commonRemovedFromSaved.tr,
     context: context,
     icon: bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
     duration: const Duration(milliseconds: 2100),
@@ -74,6 +77,7 @@ class _ColibriToast extends StatefulWidget {
   final ColibriToastStatus status;
   final IconData? icon;
   final Duration duration;
+  final bool frosted;
   final VoidCallback onDismiss;
 
   const _ColibriToast({
@@ -82,6 +86,7 @@ class _ColibriToast extends StatefulWidget {
     required this.status,
     required this.icon,
     required this.duration,
+    required this.frosted,
     required this.onDismiss,
   });
 
@@ -142,6 +147,45 @@ class _ColibriToastState extends State<_ColibriToast>
         ColibriToastStatus.info => Icons.info_rounded,
       };
 
+  Widget _buildContent() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(color: _accent, shape: BoxShape.circle),
+            child: Icon(_icon, size: 18, color: cWhite),
+          ),
+          const SizedBox(width: 11),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.title,
+                    style: const TextStyle(
+                        color: cMainText,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600)),
+                if (widget.message != null && widget.message!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(widget.message!,
+                      style: TextStyle(
+                          color: cDarkText.withValues(alpha: 0.82),
+                          fontSize: 12.5),
+                      softWrap: true),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Positioned(
@@ -173,59 +217,27 @@ class _ColibriToastState extends State<_ColibriToast>
                           offset: const Offset(0, 2)),
                     ],
                   ),
-                  child: LiquidGlassLens(
-                    style: const LiquidGlassStyle(
-                      shape: LiquidGlassShape.squircle(
-                        cornerRadius: 30,
-                        clipQuality: LiquidGlassClipQuality.exact,
-                      ),
-                      appearance:
-                          LiquidGlassAppearance(color: Color(0xD9FFFFFF)),
-                      refraction: LiquidGlassRefraction(
-                        distortion: 0.08,
-                        distortionWidth: 20,
-                        chromaticAberration: 0.0015,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                                color: _accent, shape: BoxShape.circle),
-                            child: Icon(_icon, size: 18, color: cWhite),
-                          ),
-                          const SizedBox(width: 11),
-                          Flexible(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.title,
-                                    style: const TextStyle(
-                                        color: cMainText,
-                                        fontSize: 14.5,
-                                        fontWeight: FontWeight.w600)),
-                                if (widget.message != null &&
-                                    widget.message!.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(widget.message!,
-                                      style: TextStyle(
-                                          color:
-                                              cDarkText.withValues(alpha: 0.82),
-                                          fontSize: 12.5),
-                                      softWrap: true),
-                                ],
-                              ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: widget.frosted
+                        ? BackdropFilter(
+                            filter: ui.ImageFilter.blur(
+                              sigmaX: 8,
+                              sigmaY: 8,
                             ),
+                            child: DecoratedBox(
+                              decoration: const BoxDecoration(
+                                color: Color(0xEFFFFFFF),
+                              ),
+                              child: _buildContent(),
+                            ),
+                          )
+                        : DecoratedBox(
+                            decoration: const BoxDecoration(
+                              color: Color(0xF7FFFFFF),
+                            ),
+                            child: _buildContent(),
                           ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ),

@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
+import 'package:untitled/localization/languages.dart';
 
 /// App 版本信息（对应后端 /api/system/version/check 返回的 latest）。
 class ColibriVersionInfo {
@@ -63,7 +65,7 @@ class ColibriVersionService {
 
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('版本检测失败：响应缺少 data');
+      throw ColibriApiException(LKeys.apiVersionCheckFailedMissingData.tr);
     }
 
     final latestJson = data['latest'];

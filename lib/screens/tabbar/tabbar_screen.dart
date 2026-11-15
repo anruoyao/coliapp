@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:proste_indexed_stack/proste_indexed_stack.dart';
@@ -38,7 +35,7 @@ class TabBarScreen extends StatelessWidget {
         builder: (controller) {
           return Stack(
             children: [
-              // Content fills the whole screen so it can refract through the glass bar.
+              // Content fills the screen beneath the translucent tab bar.
               ProsteIndexedStack(
                 children: [
                   IndexedStackChild(
@@ -52,12 +49,12 @@ class TabBarScreen extends StatelessWidget {
                 ],
                 index: controller.selectedTab,
               ),
-              // Floating Liquid Glass tab bar.
+              // Lightweight floating tab bar.
               Positioned(
                 left: 12,
                 right: 12,
                 bottom: bottomPadding + 8,
-                child: _LiquidGlassTabBar(
+                child: _FloatingTabBar(
                   selectedIndex: controller.selectedTab,
                   chatScreenController: chatScreenController,
                   onSelect: (index) {
@@ -83,250 +80,70 @@ class TabBarScreen extends StatelessWidget {
   }
 }
 
-/// Floating Liquid Glass tab bar.
-///
-/// Recreates Apple's iOS 26 Liquid Glass material on Flutter:
-///  1. backdrop blur + saturation of content behind the bar (real refraction)
-///  2. translucent white tint with a luminance gradient (dynamic 6-12% opacity)
-///  3. diagonal specular sheen (light bending across the surface)
-///  4. bright top edge highlight (the "wet glass" rim light)
-///  5. soft, layered drop shadow for elevation
-///  6. a branded (green) glass capsule behind the selected item
-class _LiquidGlassTabBar extends StatefulWidget {
+/// Legacy navigation bar with a lightweight translucent background.
+class _FloatingTabBar extends StatelessWidget {
   final int selectedIndex;
   final ChatsScreensController chatScreenController;
   final ValueChanged<int> onSelect;
 
-  const _LiquidGlassTabBar({
+  const _FloatingTabBar({
     required this.selectedIndex,
     required this.chatScreenController,
     required this.onSelect,
   });
 
   @override
-  State<_LiquidGlassTabBar> createState() => _LiquidGlassTabBarState();
-}
-
-class _LiquidGlassTabBarState extends State<_LiquidGlassTabBar> {
-  static const _tabCount = 5;
-  static const _horizontalPadding = 4.0;
-  static const _lensWidth = 68.0;
-
-  bool _isDragging = false;
-  double? _dragX;
-  double _lensScaleX = 1;
-  int? _pointer;
-  Offset? _pointerDownPosition;
-  Timer? _longPressTimer;
-
-  @override
-  void dispose() {
-    _longPressTimer?.cancel();
-    super.dispose();
-  }
-
-  double _rubberBand(double value, double limit) {
-    final pull = 1 - 1 / (value.abs() * 0.55 / limit + 1);
-    return limit * pull * value.sign;
-  }
-
-  void _beginDrag(Offset position, double width) {
-    final pitch = (width - _horizontalPadding * 2) / _tabCount;
-    setState(() {
-      _isDragging = true;
-      _dragX = position.dx.clamp(
-        _horizontalPadding + pitch / 2,
-        width - _horizontalPadding - pitch / 2,
-      );
-      _lensScaleX = 1;
-    });
-  }
-
-  void _moveDrag(LongPressMoveUpdateDetails details, double width) {
-    final pitch = (width - _horizontalPadding * 2) / _tabCount;
-    final minX = _horizontalPadding + pitch / 2;
-    final maxX = width - _horizontalPadding - pitch / 2;
-    final rawX = details.localPosition.dx;
-    final overshoot = rawX < minX
-        ? rawX - minX
-        : rawX > maxX
-            ? rawX - maxX
-            : 0.0;
-    final x = rawX.clamp(minX, maxX) + _rubberBand(overshoot, pitch * 0.7);
-    final index = ((x - _horizontalPadding) / pitch).floor().clamp(0, 4);
-
-    setState(() {
-      _dragX = x;
-      _lensScaleX = 1 + (overshoot.abs() / pitch).clamp(0, 0.22);
-    });
-    if (index != widget.selectedIndex) {
-      HapticFeedback.selectionClick();
-      widget.onSelect(index);
-    }
-  }
-
-  void _handlePointerDown(PointerDownEvent event, double width) {
-    if (_pointer != null) return;
-    _pointer = event.pointer;
-    _pointerDownPosition = event.localPosition;
-    _longPressTimer?.cancel();
-    _longPressTimer = Timer(const Duration(milliseconds: 350), () {
-      if (_pointerDownPosition == null) return;
-      _beginDrag(_pointerDownPosition!, width);
-      _moveDrag(
-        LongPressMoveUpdateDetails(localPosition: _pointerDownPosition!),
-        width,
-      );
-    });
-  }
-
-  void _handlePointerMove(PointerMoveEvent event, double width) {
-    if (event.pointer != _pointer) return;
-    if (!_isDragging &&
-        (event.localPosition - _pointerDownPosition!).distance > 12) {
-      _longPressTimer?.cancel();
-      return;
-    }
-    if (_isDragging) {
-      _moveDrag(
-        LongPressMoveUpdateDetails(localPosition: event.localPosition),
-        width,
-      );
-    }
-  }
-
-  void _handlePointerEnd(PointerEvent event) {
-    if (event.pointer != _pointer) return;
-    _longPressTimer?.cancel();
-    _pointer = null;
-    _pointerDownPosition = null;
-    if (_isDragging) _finishDrag();
-  }
-
-  void _finishDrag() {
-    if (!mounted) return;
-    setState(() {
-      _isDragging = false;
-      _dragX = null;
-      _lensScaleX = 1;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final pitch = (width - _horizontalPadding * 2) / _tabCount;
-        final selectedX = _horizontalPadding +
-            pitch * (widget.selectedIndex + 0.5) -
-            _lensWidth / 2;
-        final lensLeft = (_dragX == null ? selectedX : _dragX! - _lensWidth / 2)
-            .clamp(_horizontalPadding, width - _horizontalPadding - _lensWidth);
-
-        return Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (event) => _handlePointerDown(event, width),
-          onPointerMove: (event) => _handlePointerMove(event, width),
-          onPointerUp: _handlePointerEnd,
-          onPointerCancel: _handlePointerEnd,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutBack,
-            transform: Matrix4.translationValues(0, _isDragging ? -7 : 0, 0)
-              ..scaleByDouble(_isDragging ? 1.055 : 1.0, 1.0, 1.0, 1.0),
-            transformAlignment: Alignment.bottomCenter,
-            child: _GlassPill(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    AnimatedPositioned(
-                      duration: _isDragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 360),
-                      curve: Curves.easeOutBack,
-                      left: lensLeft,
-                      top: 2,
-                      width: _lensWidth * _lensScaleX,
-                      height: 54,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: cPrimary.withValues(alpha: 0.16),
-                          border: Border.all(
-                            color: cPrimary.withValues(alpha: 0.30),
-                            width: 0.8,
-                          ),
-                          borderRadius: BorderRadius.circular(23),
-                          boxShadow: _isDragging
-                              ? [
-                                  BoxShadow(
-                                    color: cBlack.withValues(alpha: 0.12),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ]
-                              : const [],
-                        ),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _tabButton(LKeys.feed, MyImages.quill, 0),
-                        _tabButton(LKeys.rooms, MyImages.meeting, 1),
-                        _tabButton(LKeys.reels, MyImages.reels, 2),
-                        GetBuilder<ChatsScreensController>(
-                          init: widget.chatScreenController,
-                          builder: (c) => _tabButton(
-                              LKeys.chats, MyImages.chat, 3,
-                              isBadge: c.isNewMessage),
-                        ),
-                        _tabButton(LKeys.profile, MyImages.profile, 4),
-                      ],
-                    ),
-                  ],
-                ),
+    return _TabBarSurface(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _tabButton(LKeys.feed, MyImages.quill, 0),
+            _tabButton(LKeys.rooms, MyImages.meeting, 1),
+            _tabButton(LKeys.reels, MyImages.reels, 2),
+            GetBuilder<ChatsScreensController>(
+              init: chatScreenController,
+              builder: (controller) => _tabButton(
+                LKeys.chats,
+                MyImages.chat,
+                3,
+                isBadge: controller.isNewMessage,
               ),
             ),
-          ),
-        );
-      },
+            _tabButton(LKeys.profile, MyImages.profile, 4),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _tabButton(String title, String image, int index,
       {bool isBadge = false}) {
     return GestureDetector(
-      onTap: () => widget.onSelect(index),
+      onTap: () => onSelect(index),
       behavior: HitTestBehavior.opaque,
       child: _TabItem(
         title: title,
         image: image,
-        isSelected: widget.selectedIndex == index,
+        isSelected: selectedIndex == index,
         isBadge: isBadge,
       ),
     );
   }
 }
 
-/// Real Liquid Glass surface powered by liquid_glass_easy.
-///
-/// On Impeller (Android/iOS default) the lens refracts the live backdrop in
-/// real time — content behind the bar is genuinely bent and magnified at the
-/// edges, not merely blurred. On Skia (Web/Windows) it gracefully degrades to
-/// a frosted look. The shader handles blur + tint + specular + edge light +
-/// chromatic aberration internally; we only add a soft elevation shadow.
-class _GlassPill extends StatelessWidget {
+/// Static translucent surface for the legacy tab bar.
+class _TabBarSurface extends StatelessWidget {
   final Widget child;
 
-  const _GlassPill({required this.child});
+  const _TabBarSurface({required this.child});
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      // Soft elevation shadow around the floating glass pill.
+      // Keep the legacy floating bar legible over scrolling content.
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(34),
         boxShadow: [
@@ -340,22 +157,12 @@ class _GlassPill extends StatelessWidget {
               offset: const Offset(0, 3)),
         ],
       ),
-      child: LiquidGlassLens(
-        style: const LiquidGlassStyle(
-          shape: LiquidGlassShape.squircle(
-            cornerRadius: 34,
-            clipQuality: LiquidGlassClipQuality.exact,
-          ),
-          appearance: LiquidGlassAppearance(
-            color: Color(0x22FFFFFF), // ~13% white tint (Apple-like)
-          ),
-          refraction: LiquidGlassRefraction(
-            distortion: 0.13, // light-bending strength at edges
-            distortionWidth: 30, // thickness of the refraction band
-            chromaticAberration: 0.003, // subtle RGB fringe at edges
-          ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(34),
+        child: ColoredBox(
+          color: const Color(0xEFFFFFFF),
+          child: child,
         ),
-        child: child,
       ),
     );
   }

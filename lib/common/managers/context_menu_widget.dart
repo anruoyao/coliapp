@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:untitled/common/extensions/font_extension.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
-import 'package:untitled/utilities/const.dart';
 
 class Menu {
   final List<MenuAction> children;
@@ -64,43 +62,20 @@ class _ContextMenuSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: cWhite,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cLightIcon.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(2),
-              ),
+    return ColibriSheetSurface(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ColibriSheetHeader(),
+          const SizedBox(height: 8),
+          for (var index = 0; index < menu.children.length; index++)
+            ColibriSheetActionRow(
+              title: menu.children[index].title,
+              showDivider: index < menu.children.length - 1,
+              onTap: () => Navigator.of(context).pop(index),
             ),
-            const SizedBox(height: 8),
-            for (var index = 0; index < menu.children.length; index++)
-              InkWell(
-                onTap: () => Navigator.of(context).pop(index),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      menu.children[index].title,
-                      style: MyTextStyle.gilroyRegular(color: cDarkText),
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
+        ],
       ),
     );
   }

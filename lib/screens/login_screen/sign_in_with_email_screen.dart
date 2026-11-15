@@ -10,6 +10,7 @@ import 'package:untitled/common/extensions/font_extension.dart';
 import 'package:untitled/common/extensions/string_extension.dart';
 import 'package:untitled/common/managers/guest_session.dart';
 import 'package:untitled/common/managers/session_manager.dart';
+import 'package:untitled/localization/allLanguages.dart';
 import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_feed/colibri_feed_screen.dart';
 import 'package:untitled/screens/colibri_home/colibri_home_screen.dart';
@@ -168,7 +169,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
       case EmailSignInType.signIn:
         return LKeys.signInWithEmail;
       case EmailSignInType.signUp:
-        return signUpStep == 2 ? '验证邮箱' : LKeys.register;
+        return signUpStep == 2 ? LKeys.loginVerifyEmail.tr : LKeys.register;
       case EmailSignInType.forgot:
         return LKeys.forgotPassword;
     }
@@ -217,13 +218,13 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
     if (m.contains('credentials are incorrect') ||
         m.contains('invalid credentials') ||
         m.contains('password')) {
-      return '邮箱或密码不正确';
+      return LKeys.loginInvalidCredentials.tr;
     }
     if (m.contains('unauthorized') || m.contains('unauthenticated')) {
-      return '登录状态已失效，请重新登录';
+      return LKeys.loginSessionExpired.tr;
     }
     if (m.contains('too many attempts') || m.contains('throttl')) {
-      return '尝试次数过多，请稍后再试';
+      return LKeys.loginTooManyAttempts.tr;
     }
     return msg;
   }
@@ -240,19 +241,19 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
     final minLen = authConfig?.passwordMin ?? 8;
 
     if (fullName.length < 2) {
-      _toast('昵称至少需要 2 个字符');
+      _toast(LKeys.loginNicknameMinLength.tr);
       return;
     }
     if (!RegExp(r'^[a-zA-Z0-9._]{2,32}$').hasMatch(username)) {
-      _toast('用户名只能包含字母、数字、点或下划线（2-32 位）');
+      _toast(LKeys.loginUsernameInvalid.tr);
       return;
     }
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      _toast('请输入正确的邮箱地址');
+      _toast(LKeys.loginInvalidEmail.tr);
       return;
     }
     if (password.length < minLen) {
-      _toast('密码至少需要 $minLen 个字符');
+      _toast(LKeys.loginPasswordMinLength.trParams({'p1': '${minLen}'}));
       return;
     }
     if (password != confirmPasswordController.text) {
@@ -270,7 +271,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
 
     if (!config.registrationEnabled) {
       baseController.stopLoading();
-      _toast('注册功能当前已关闭，请稍后再试');
+      _toast(LKeys.loginRegistrationDisabled.tr);
       return;
     }
 
@@ -295,10 +296,10 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
       authConfig = config;
       return config;
     } on ColibriApiException catch (e) {
-      _toast('网络异常，请检查后重试：${e.message}');
+      _toast(LKeys.loginNetworkError.trParams({'p1': '${e.message}'}));
       return null;
     } catch (e) {
-      _toast('网络异常：$e');
+      _toast(LKeys.apiNetworkError.trParams({'p1': '${e}'}));
       return null;
     }
   }
@@ -322,7 +323,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
           ttl: result.codeExpiresIn, cooldown: result.resendCooldown);
 
       if (!initial) {
-        _toast('验证码已重新发送，请查收邮件', error: false);
+        _toast(LKeys.loginCodeResent.tr, error: false);
       }
       // 进入验证码页后自动唤起数字键盘
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -345,7 +346,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
       }
       _toast(_fieldErrorMessage(e) ?? e.message);
     } catch (e) {
-      _toast('网络异常：$e');
+      _toast(LKeys.apiNetworkError.trParams({'p1': '${e}'}));
     }
   }
 
@@ -355,11 +356,11 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
     final code = codeController.text.trim();
 
     if (code.length != 6) {
-      setState(() => codeError = '请输入 6 位验证码');
+      setState(() => codeError = LKeys.loginCodeRequired.tr);
       return;
     }
     if (isCodeExpired) {
-      setState(() => codeError = '验证码已过期，请重新获取');
+      setState(() => codeError = LKeys.loginCodeExpired.tr);
       return;
     }
 
@@ -376,6 +377,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
         email: emailController.text.trim(),
         password: passwordController.text,
         emailCode: emailCode,
+        language: SessionManager.shared.getLang().language.languageCode,
       );
       SessionManager.shared.setToken(result.token);
       SessionManager.shared.setColibriUser(result.user);
@@ -400,7 +402,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
       _toast(msg ?? e.message);
     } catch (e) {
       baseController.stopLoading();
-      _toast('网络异常：$e');
+      _toast(LKeys.apiNetworkError.trParams({'p1': '${e}'}));
     }
   }
 
@@ -574,39 +576,41 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
                   color: cLightText.withValues(alpha: 0.4)),
               _StepDot(active: false, label: '2'),
               const SizedBox(width: 8),
-              Text('填写账号信息',
+              Text(LKeys.loginAccountInfo.tr,
                   style: MyTextStyle.gilroyLight(color: cLightText, size: 12)),
             ],
           ),
           const SizedBox(height: 16),
           // 昵称：即你的称呼，会显示在个人主页和帖子旁。必填（≥2字符）。
           _FieldWithHint(
-            label: '昵称',
-            helper: '你的称呼，会显示在主页和帖子旁',
+            label: LKeys.loginNickname.tr,
+            helper: LKeys.loginNicknameHelper.tr,
             field: MyTextField(
-                controller: fullNameController, placeHolder: '请输入昵称'),
+                controller: fullNameController,
+                placeHolder: LKeys.loginNicknamePlaceholder.tr),
           ),
           const SizedBox(height: 12),
           // 用户名 @xxx：别人@你/搜索你用的唯一账号。必填，仅限拉丁字母、数字、点和下划线。
           _FieldWithHint(
-            label: '用户名',
-            helper: '只能包含拉丁字母、数字、点和下划线，全站唯一',
+            label: LKeys.loginUsernameLabel.tr,
+            helper: LKeys.loginUsernameHelper.tr,
             field: MyTextField(
                 controller: usernameController, placeHolder: LKeys.username),
           ),
           const SizedBox(height: 12),
           // 邮箱：登录账号，全站唯一，用于接收验证码。必填。
           _FieldWithHint(
-            label: '邮箱',
-            helper: '用于登录和接收验证码，全站唯一',
+            label: LKeys.commonEmail.tr,
+            helper: LKeys.loginEmailHelper.tr,
             field: MyTextField(
                 controller: emailController, placeHolder: LKeys.email),
           ),
           const SizedBox(height: 12),
           // 密码：登录用，需满足最小长度。必填。
           _FieldWithHint(
-            label: '密码',
-            helper: '至少 ${authConfig?.passwordMin ?? 8} 个字符',
+            label: LKeys.loginPasswordLabel.tr,
+            helper: LKeys.loginPasswordMinHint
+                .trParams({'p1': '${authConfig?.passwordMin ?? 8}'}),
             field: SecureTextField(
               controller: passwordController,
               placeHolder: LKeys.password,
@@ -620,7 +624,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
           ),
           EmailButton(
             text: (authConfig?.emailVerificationEnabled ?? false)
-                ? '继续'
+                ? LKeys.loginContinue.tr
                 : LKeys.register,
             isDisable: !fieldsFilled,
             onTap: _onSignUpContinue,
@@ -667,7 +671,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
                 const Icon(Icons.arrow_back_ios_new_rounded,
                     size: 14, color: cBlack),
                 const SizedBox(width: 4),
-                Text('返回修改',
+                Text(LKeys.loginBackToEdit.tr,
                     style: MyTextStyle.gilroyMedium(color: cBlack, size: 13)),
               ],
             ),
@@ -686,7 +690,7 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
           const SizedBox(height: 14),
           Center(
             child: Text(
-              '验证码已发送至',
+              LKeys.loginCodeSentTo.tr,
               style: MyTextStyle.gilroyLight(color: cLightText, size: 13),
             ),
           ),
@@ -710,8 +714,9 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
             child: Text(
               codeError ??
                   (isCodeExpired
-                      ? '验证码已过期，请点击下方「重新发送」'
-                      : '验证码 ${_formatSeconds(codeTtlSeconds)} 内有效，请勿泄露给他人'),
+                      ? LKeys.loginCodeExpiredResend.tr
+                      : LKeys.loginCodeTtl.trParams(
+                          {'p1': '${_formatSeconds(codeTtlSeconds)}'})),
               style: MyTextStyle.gilroyLight(
                 color: codeError != null || isCodeExpired ? cRed : cLightText,
                 size: 12,
@@ -731,8 +736,9 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
                     },
               child: Text(
                 resendInSeconds > 0
-                    ? '重新发送（${_formatSeconds(resendInSeconds)}）'
-                    : '没收到验证码？重新发送',
+                    ? LKeys.loginResendCountdown
+                        .trParams({'p1': '${_formatSeconds(resendInSeconds)}'})
+                    : LKeys.loginDidNotReceiveCode.tr,
                 style: MyTextStyle.gilroySemiBold(
                   color: resendInSeconds > 0 ? cLightText : cHashtagColor,
                   size: 13,
@@ -741,13 +747,13 @@ class _SignInWithEmailScreenState extends State<SignInWithEmailScreen>
             ),
           ),
           EmailButton(
-            text: '完成注册',
+            text: LKeys.loginCompleteSignUp.tr,
             isDisable: !canConfirm,
             onTap: _completeRegistration,
           ),
           Center(
             child: Text(
-              '没收到邮件？请检查垃圾邮件或广告文件夹',
+              LKeys.loginCheckSpam.tr,
               style: MyTextStyle.gilroyLight(color: cLightText, size: 11),
             ),
           ),

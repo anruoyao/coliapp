@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/extensions/duration_extension.dart';
 import 'package:untitled/common/extensions/font_extension.dart';
-import 'package:untitled/common/widgets/buttons/xmark_button.dart';
+import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
 import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/musics_model.dart';
@@ -210,57 +210,47 @@ class MusicTrimSheet extends StatelessWidget {
       );
     }
 
-    return SafeArea(
-      bottom: false,
-      child: Wrap(
-        children: [
-          ClipSmoothRect(
-            radius: SmoothBorderRadius.vertical(
-              top: SmoothRadius(
-                  cornerRadius: 30, cornerSmoothing: cornerSmoothing),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+      ),
+      child: ColibriSheetSurface(
+        backgroundColor: cBlackSheetBG,
+        padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ColibriSheetHeader(
+              title: LKeys.selectMusic.tr,
+              foregroundColor: cWhite,
+              handleColor: cWhite.withValues(alpha: 0.35),
+              trailing: const ColibriSheetCloseButton(),
             ),
-            child: Container(
-              color: cBlackSheetBG,
-              child: SafeArea(
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 20),
                 child: Column(
                   children: [
-                    Container(
-                      height: 65,
-                      margin: EdgeInsets.symmetric(horizontal: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            LKeys.selectMusic.tr,
-                            style: MyTextStyle.gilroyRegular(color: cPrimary),
-                          ),
-                          XmarkButtonForSheet()
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     _musicCard(),
-                    SizedBox(height: 40),
+                    const SizedBox(height: 32),
                     Container(
                       height: 50,
                       decoration: ShapeDecoration(
-                          shape: StadiumBorder(),
-                          color: cWhite.withValues(alpha: 0.08)),
+                        shape: const StadiumBorder(),
+                        color: cWhite.withValues(alpha: 0.08),
+                      ),
                       child: _waveSlider(),
                     ),
-                    SizedBox(height: 30),
-                    Container(
-                      width: 340,
-                      child: _bottomOptions(),
-                    ),
-                    SizedBox(height: 40),
+                    const SizedBox(height: 24),
+                    SizedBox(width: 340, child: _bottomOptions()),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

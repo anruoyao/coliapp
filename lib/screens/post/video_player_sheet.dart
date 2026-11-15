@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/extensions/duration_extension.dart';
 import 'package:untitled/common/extensions/font_extension.dart';
+import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/models/chat.dart';
 import 'package:untitled/screens/post/post_card.dart';
 import 'package:untitled/screens/post/post_controller.dart';
@@ -26,8 +27,8 @@ class _VideoPlayerSheetState extends State<VideoPlayerSheet> {
 
   @override
   void initState() {
-    initPlayer();
     super.initState();
+    initPlayer();
   }
 
   @override
@@ -39,176 +40,174 @@ class _VideoPlayerSheetState extends State<VideoPlayerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const ShapeDecoration(
-        color: cBlackSheetBG,
-        shape: SmoothRectangleBorder(
-          borderRadius: SmoothBorderRadius.only(
-            topLeft: SmoothRadius(
-                cornerRadius: 20, cornerSmoothing: cornerSmoothing),
-            topRight: SmoothRadius(
-                cornerRadius: 20, cornerSmoothing: cornerSmoothing),
-          ),
-        ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.95,
       ),
-      margin: EdgeInsets.only(top: Get.statusBarHeight),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.only(top: 20, bottom: 0, right: 20, left: 20),
-            child: PostTopBar(
-              controller: widget.controller,
-              isForVideo: true,
+      child: ColibriSheetSurface(
+        backgroundColor: cBlackSheetBG,
+        padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ColibriSheetHeader(
+              foregroundColor: cWhite,
+              handleColor: cWhite.withValues(alpha: 0.35),
             ),
-          ),
-          SizedBox(height: 10),
-          Expanded(
-            child: SingleChildScrollView(
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: PostDescriptionView(
-                          controller: widget.controller, isForVideo: true),
-                    ),
-                    if (playerController != null)
-                      Container(
-                        width: Get.width,
-                        height: Get.width,
-                        color: cWhite.withValues(alpha: 0.1),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            GestureDetector(
-                              onTap: playPause,
-                              child: Hero(
-                                tag: 'player',
-                                transitionOnUserGestures: true,
-                                child: AspectRatio(
-                                  aspectRatio:
-                                      playerController!.value.aspectRatio,
-                                  child: VideoPlayer(playerController!),
+            Padding(
+              padding: const EdgeInsets.only(
+                  top: 12, bottom: 0, right: 20, left: 20),
+              child: PostTopBar(
+                controller: widget.controller,
+                isForVideo: true,
+              ),
+            ),
+            SizedBox(height: 10),
+            Expanded(
+              child: SingleChildScrollView(
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: PostDescriptionView(
+                            controller: widget.controller, isForVideo: true),
+                      ),
+                      if (playerController != null)
+                        Container(
+                          width: Get.width,
+                          height: Get.width,
+                          color: cWhite.withValues(alpha: 0.1),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: playPause,
+                                child: Hero(
+                                  tag: 'player',
+                                  transitionOnUserGestures: true,
+                                  child: AspectRatio(
+                                    aspectRatio:
+                                        playerController!.value.aspectRatio,
+                                    child: VideoPlayer(playerController!),
+                                  ),
                                 ),
                               ),
-                            ),
-                            playerController != null &&
-                                    playerController!.value.isInitialized &&
-                                    !isLoading
-                                ? ValueListenableBuilder(
-                                    valueListenable: playerController!,
-                                    builder: (context, VideoPlayerValue value,
-                                            child) =>
-                                        Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Spacer(),
-                                            GestureDetector(
-                                              onTap: () {
-                                                context.pushTransparentRoute(
-                                                  ContentFullScreenForPost(
-                                                    message: ChatMessage(
-                                                        content: widget
-                                                                .controller
-                                                                .post
-                                                                .content
-                                                                ?.first
-                                                                .content ??
-                                                            '',
-                                                        msgType: 'VIDEO'),
-                                                    playerController:
-                                                        playerController,
+                              playerController != null &&
+                                      playerController!.value.isInitialized &&
+                                      !isLoading
+                                  ? ValueListenableBuilder(
+                                      valueListenable: playerController!,
+                                      builder: (context, VideoPlayerValue value,
+                                              child) =>
+                                          Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Spacer(),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  context.pushTransparentRoute(
+                                                    ContentFullScreenForPost(
+                                                      message: ChatMessage(
+                                                          content: widget
+                                                                  .controller
+                                                                  .post
+                                                                  .content
+                                                                  ?.first
+                                                                  .content ??
+                                                              '',
+                                                          msgType: 'VIDEO'),
+                                                      playerController:
+                                                          playerController,
+                                                    ),
+                                                  );
+                                                },
+                                                child: Container(
+                                                  decoration: ShapeDecoration(
+                                                    shape: const SmoothRectangleBorder(
+                                                        borderRadius: SmoothBorderRadius
+                                                            .all(SmoothRadius(
+                                                                cornerRadius: 5,
+                                                                cornerSmoothing:
+                                                                    cornerSmoothing))),
+                                                    color: cBlack.withValues(
+                                                        alpha: 0.4),
                                                   ),
-                                                );
-                                              },
-                                              child: Container(
-                                                decoration: ShapeDecoration(
-                                                  shape: const SmoothRectangleBorder(
-                                                      borderRadius: SmoothBorderRadius
-                                                          .all(SmoothRadius(
-                                                              cornerRadius: 5,
-                                                              cornerSmoothing:
-                                                                  cornerSmoothing))),
-                                                  color: cBlack.withValues(
-                                                      alpha: 0.4),
-                                                ),
-                                                margin:
-                                                    const EdgeInsets.all(10),
-                                                padding:
-                                                    const EdgeInsets.all(4),
-                                                child: const Icon(
-                                                    Icons.fullscreen_rounded,
-                                                    color: cWhite),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const Spacer(),
-                                        value.isPlaying == true
-                                            ? Container()
-                                            : GestureDetector(
-                                                onTap: playPause,
-                                                child: CircleAvatar(
-                                                  backgroundColor: cBlack
-                                                      .withValues(alpha: 0.4),
-                                                  foregroundColor: cWhite,
+                                                  margin:
+                                                      const EdgeInsets.all(10),
+                                                  padding:
+                                                      const EdgeInsets.all(4),
                                                   child: const Icon(
-                                                    Icons.play_arrow_rounded,
-                                                    size: 30,
-                                                  ),
+                                                      Icons.fullscreen_rounded,
+                                                      color: cWhite),
                                                 ),
                                               ),
-                                        const Spacer(),
-                                        VideoSlider(
-                                            controller: playerController,
-                                            onChange: onChange),
-                                      ],
-                                    ),
-                                  )
-                                : SizedBox(height: Get.width)
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        width: Get.width,
-                        height: Get.width,
-                        color: cWhite.withValues(alpha: 0.1),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: cPrimary,
+                                            ],
+                                          ),
+                                          const Spacer(),
+                                          value.isPlaying == true
+                                              ? Container()
+                                              : GestureDetector(
+                                                  onTap: playPause,
+                                                  child: CircleAvatar(
+                                                    backgroundColor: cBlack
+                                                        .withValues(alpha: 0.4),
+                                                    foregroundColor: cWhite,
+                                                    child: const Icon(
+                                                      Icons.play_arrow_rounded,
+                                                      size: 30,
+                                                    ),
+                                                  ),
+                                                ),
+                                          const Spacer(),
+                                          VideoSlider(
+                                              controller: playerController,
+                                              onChange: onChange),
+                                        ],
+                                      ),
+                                    )
+                                  : SizedBox(height: Get.width)
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          width: Get.width,
+                          height: Get.width,
+                          color: cWhite.withValues(alpha: 0.1),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: cPrimary,
+                            ),
                           ),
                         ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: PostBottomBar(
-                          controller: widget.controller, isForVideo: true),
-                    )
-                  ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: PostBottomBar(
+                            controller: widget.controller, isForVideo: true),
+                      )
+                    ],
+                  ),
                 ),
               ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }
 
   void initPlayer() {
-    playerController = VideoPlayerController.networkUrl(Uri.parse(
-        widget.controller.post.content?.first.content?.addBaseURL() ?? ''))
-      ..initialize().then((value) {
-        if (Get.isBottomSheetOpen == true) {
-          play();
-        }
-        isLoading = false;
-        setState(() {});
-      });
+    final controller = VideoPlayerController.networkUrl(Uri.parse(
+        widget.controller.post.content?.first.content?.addBaseURL() ?? ''));
+    playerController = controller;
+    controller.initialize().then((_) {
+      if (!mounted) return;
+      if (Get.isBottomSheetOpen == true) controller.play();
+      setState(() => isLoading = false);
+    });
     setState(() {});
   }
 

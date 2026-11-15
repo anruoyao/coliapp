@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:untitled/common/managers/guest_session.dart';
 import 'package:untitled/common/widgets/guest_auth_sheet.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
 import 'package:untitled/models/colibri_post_models.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
@@ -40,7 +42,10 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
   bool _loading = false;
   bool _failed = false;
   bool _inFullscreen = false;
+  bool _controlsVisible = true;
   double? _dragMs; // 拖动进度条时的本地值（毫秒）
+  Timer? _controlsTimer;
+  bool _wasPlaying = false;
 
   bool get _hasThumb =>
       widget.media.thumbnailUrl != null &&
@@ -48,8 +53,10 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
 
   @override
   void dispose() {
+    _controlsTimer?.cancel();
     final c = _controller;
     if (c != null) {
+      c.removeListener(_syncPlaybackState);
       ColibriMediaPlayback.shared.deactivateVideo(c);
       c.dispose();
     }
@@ -69,17 +76,21 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
       c = VideoPlayerController.networkUrl(Uri.parse(widget.media.sourceUrl));
       _controller = c;
       await c.initialize();
+      c.addListener(_syncPlaybackState);
       if (_controller != c) {
         await c.dispose();
         return;
       }
       await ColibriMediaPlayback.shared.activateVideo(c);
       await c.play();
+      _wasPlaying = true;
+      _scheduleControlsHide();
     } catch (_) {
       if (identical(_controller, c)) {
         _controller = null;
         _failed = true;
       }
+      c?.removeListener(_syncPlaybackState);
       await c?.dispose();
     }
     if (mounted) setState(() => _loading = false);
@@ -90,12 +101,52 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
     if (c == null || !c.value.isInitialized) return;
     if (c.value.isPlaying) {
       await c.pause();
+      _wasPlaying = false;
+      _controlsTimer?.cancel();
+      if (mounted) setState(() => _controlsVisible = true);
     } else {
       if (c.value.isCompleted) await c.seekTo(Duration.zero);
       await ColibriMediaPlayback.shared.activateVideo(c);
       await c.play();
+      _wasPlaying = true;
+      _showControlsTemporarily();
     }
     if (mounted) setState(() {});
+  }
+
+  void _syncPlaybackState() {
+    final playing = _controller?.value.isPlaying ?? false;
+    if (playing == _wasPlaying) return;
+    _wasPlaying = playing;
+    if (!playing) {
+      _controlsTimer?.cancel();
+      if (mounted) setState(() => _controlsVisible = true);
+    } else {
+      _scheduleControlsHide();
+    }
+  }
+
+  void _scheduleControlsHide() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || _dragMs != null || !_wasPlaying) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _showControlsTemporarily() {
+    if (!mounted) return;
+    setState(() => _controlsVisible = true);
+    _scheduleControlsHide();
+  }
+
+  void _toggleControls() {
+    if (_controlsVisible) {
+      _controlsTimer?.cancel();
+      setState(() => _controlsVisible = false);
+    } else {
+      _showControlsTemporarily();
+    }
   }
 
   /// 进入全屏：横版视频强制横屏，竖版视频保持竖屏；与帖内共享控制器续播。
@@ -104,13 +155,19 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
     if (c == null || !c.value.isInitialized) return;
     setState(() => _inFullscreen = true);
     await Get.to(() => ColibriFullScreenVideo(controller: c), opaque: false);
-    if (mounted) setState(() => _inFullscreen = false);
+    if (mounted) {
+      setState(() => _inFullscreen = false);
+      _showControlsTemporarily();
+    }
   }
 
   /// 视频滚出屏幕时自动暂停（避免看不见画面仍在出声）。
   void _onVisibilityChanged(VisibilityInfo info) {
     if (info.visibleFraction < 0.25 && !_inFullscreen) {
       _controller?.pause();
+      _wasPlaying = false;
+      _controlsTimer?.cancel();
+      if (mounted) setState(() => _controlsVisible = true);
     }
   }
 
@@ -133,11 +190,11 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
         alignment: Alignment.center,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            CircularProgressIndicator(color: cPrimary, strokeWidth: 2),
-            SizedBox(height: 10),
-            Text('视频处理中，请稍后刷新',
-                style: TextStyle(fontSize: 13, color: cLightText)),
+          children: [
+            const CircularProgressIndicator(color: cPrimary, strokeWidth: 2),
+            const SizedBox(height: 10),
+            Text(LKeys.feedVideoProcessing.tr,
+                style: const TextStyle(fontSize: 13, color: cLightText)),
           ],
         ),
       );
@@ -227,8 +284,9 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
                 ),
                 if (_failed) ...[
                   const SizedBox(height: 8),
-                  const Text('播放失败，点击重试',
-                      style: TextStyle(fontSize: 12, color: Colors.white)),
+                  Text(LKeys.feedPlaybackFailed.tr,
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.white)),
                 ],
               ],
             ),
@@ -245,11 +303,17 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
       Positioned.fill(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: _toggle,
+          onTap: () {
+            if (!c.value.isPlaying) {
+              _toggle();
+            } else {
+              _toggleControls();
+            }
+          },
           child: ValueListenableBuilder<VideoPlayerValue>(
             valueListenable: c,
             builder: (context, value, _) => Center(
-              child: value.isPlaying
+              child: value.isPlaying || !_controlsVisible
                   ? const SizedBox.shrink()
                   : Container(
                       padding: const EdgeInsets.all(14),
@@ -267,7 +331,14 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
         left: 0,
         right: 0,
         bottom: 0,
-        child: _buildBottomBar(c),
+        child: IgnorePointer(
+          ignoring: !_controlsVisible,
+          child: AnimatedOpacity(
+            opacity: _controlsVisible ? 1 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: _buildBottomBar(c),
+          ),
+        ),
       ),
     ];
   }
@@ -316,11 +387,14 @@ class _ColibriPostVideoState extends State<ColibriPostVideo> {
                     value:
                         dur > 0 ? (_dragMs ?? pos).clamp(0, dur).toDouble() : 0,
                     max: dur > 0 ? dur.toDouble() : 1.0,
+                    onChangeStart:
+                        dur > 0 ? (_) => _controlsTimer?.cancel() : null,
                     onChanged:
                         dur > 0 ? (v) => setState(() => _dragMs = v) : null,
                     onChangeEnd: (v) {
                       c.seekTo(Duration(milliseconds: v.round()));
                       setState(() => _dragMs = null);
+                      _scheduleControlsHide();
                     },
                   ),
                 ),
@@ -381,6 +455,7 @@ class _ColibriPostAudioState extends State<ColibriPostAudio> {
       builder: (context, _) {
         final service = ColibriMediaPlayback.shared;
         final url = widget.media.sourceUrl;
+        final processing = widget.media.isProcessing;
         final c = service.isActiveAudio(url) ? service.audioController : null;
         final initialized = c != null && c.value.isInitialized;
         final loading = service.isLoadingAudio(url);
@@ -392,131 +467,174 @@ class _ColibriPostAudioState extends State<ColibriPostAudio> {
         final curText = _fmt(_dragMs ?? posMs);
         final totalText = durMs > 0 ? _fmt(durMs) : widget.media.durationText;
 
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: cLightBg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
             children: [
-              // 播放/暂停按钮
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: url.isEmpty ? null : () => service.toggleAudio(url),
-                child: loading && !initialized
-                    ? const SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: cPrimary))
-                    : Container(
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                            color: cPrimary, shape: BoxShape.circle),
-                        child: Icon(
-                            playing
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 22),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              // 波形进度 + 进度条
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                color: cLightBg,
+                child: Row(
                   children: [
-                    // 波形：已播部分高亮，点击跳转
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTapUp: initialized && durMs > 0
-                              ? (d) => service.seekAudio(
-                                    url,
-                                    Duration(
-                                        milliseconds: (d.localPosition.dx /
-                                                constraints.maxWidth *
-                                                durMs)
-                                            .round()),
-                                  )
-                              : null,
-                          child: SizedBox(
-                            height: 24,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: List.generate(_bars.length, (i) {
-                                final played =
-                                    (i + 0.5) / _bars.length <= progress;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 2),
-                                  child: Container(
-                                    width: 2,
-                                    height: 24 * _bars[i],
-                                    decoration: BoxDecoration(
-                                      color: played
-                                          ? cPrimary
-                                          : cLightText.withOpacity(0.35),
-                                      borderRadius: BorderRadius.circular(1),
-                                    ),
-                                  ),
-                                );
-                              }),
+                    // 播放/暂停按钮
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: processing || url.isEmpty
+                          ? null
+                          : () => service.toggleAudio(url),
+                      child: loading && !initialized
+                          ? const SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: cPrimary))
+                          : Container(
+                              width: 36,
+                              height: 36,
+                              decoration: const BoxDecoration(
+                                  color: cPrimary, shape: BoxShape.circle),
+                              child: Icon(
+                                  playing
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 22),
                             ),
-                          ),
-                        );
-                      },
                     ),
-                    const SizedBox(height: 2),
-                    // 进度条：当前时间 + 滑块 + 总时长
-                    Row(
-                      children: [
-                        Text(curText,
-                            style: const TextStyle(
-                                fontSize: 11, color: cLightText)),
-                        Expanded(
-                          child: SliderTheme(
-                            data: const SliderThemeData(
-                              trackHeight: 2,
-                              thumbShape:
-                                  RoundSliderThumbShape(enabledThumbRadius: 5),
-                              overlayShape:
-                                  RoundSliderOverlayShape(overlayRadius: 10),
-                              activeTrackColor: cPrimary,
-                              inactiveTrackColor: cLightText,
-                              thumbColor: cPrimary,
-                            ),
-                            child: Slider(
-                              value: durMs > 0
-                                  ? (_dragMs ?? posMs)
-                                      .clamp(0, durMs)
-                                      .toDouble()
-                                  : 0,
-                              max: durMs > 0 ? durMs.toDouble() : 1.0,
-                              onChanged: initialized && durMs > 0
-                                  ? (v) => setState(() => _dragMs = v)
-                                  : null,
-                              onChangeEnd: (v) {
-                                service.seekAudio(
-                                    url, Duration(milliseconds: v.round()));
-                                setState(() => _dragMs = null);
-                              },
-                            ),
+                    const SizedBox(width: 12),
+                    // 波形进度 + 进度条
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 波形：已播部分高亮，点击跳转
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapUp: !processing && initialized && durMs > 0
+                                    ? (d) => service.seekAudio(
+                                          url,
+                                          Duration(
+                                              milliseconds:
+                                                  (d.localPosition.dx /
+                                                          constraints.maxWidth *
+                                                          durMs)
+                                                      .round()),
+                                        )
+                                    : null,
+                                child: SizedBox(
+                                  height: 24,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: List.generate(_bars.length, (i) {
+                                      final played =
+                                          (i + 0.5) / _bars.length <= progress;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 2),
+                                        child: Container(
+                                          width: 2,
+                                          height: 24 * _bars[i],
+                                          decoration: BoxDecoration(
+                                            color: played
+                                                ? cPrimary
+                                                : cLightText.withOpacity(0.35),
+                                            borderRadius:
+                                                BorderRadius.circular(1),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ),
-                        Text(totalText,
-                            style: const TextStyle(
-                                fontSize: 11, color: cLightText)),
-                      ],
+                          const SizedBox(height: 2),
+                          // 进度条：当前时间 + 滑块 + 总时长
+                          Row(
+                            children: [
+                              Text(curText,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: cLightText)),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: const SliderThemeData(
+                                    trackHeight: 2,
+                                    thumbShape: RoundSliderThumbShape(
+                                        enabledThumbRadius: 5),
+                                    overlayShape: RoundSliderOverlayShape(
+                                        overlayRadius: 10),
+                                    activeTrackColor: cPrimary,
+                                    inactiveTrackColor: cLightText,
+                                    thumbColor: cPrimary,
+                                  ),
+                                  child: Slider(
+                                    value: durMs > 0
+                                        ? (_dragMs ?? posMs)
+                                            .clamp(0, durMs)
+                                            .toDouble()
+                                        : 0,
+                                    max: durMs > 0 ? durMs.toDouble() : 1.0,
+                                    onChanged:
+                                        !processing && initialized && durMs > 0
+                                            ? (v) => setState(() => _dragMs = v)
+                                            : null,
+                                    onChangeEnd: (v) {
+                                      service.seekAudio(url,
+                                          Duration(milliseconds: v.round()));
+                                      setState(() => _dragMs = null);
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Text(totalText,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: cLightText)),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
+              if (processing)
+                Positioned.fill(
+                  child: AbsorbPointer(
+                    child: Container(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            LKeys.audioProcessing.tr,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: cMainText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -574,7 +692,9 @@ class ColibriPostDocument extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  media.fileName.isNotEmpty ? media.fileName : '附件',
+                  media.fileName.isNotEmpty
+                      ? media.fileName
+                      : LKeys.feedAttachment.tr,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -626,7 +746,7 @@ class ColibriPostPoll extends StatelessWidget {
   Future<void> _vote(int choiceIndex) async {
     // 访客：只读，点击投票项直接弹登录引导，不发请求
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '投票');
+      AuthGate.requireLogin(() {}, feature: LKeys.feedPoll.tr);
       return;
     }
     // 已投票或已过期则不可再投（对齐网页）
@@ -638,7 +758,7 @@ class ColibriPostPoll extends StatelessWidget {
       );
       onVote(updated);
     } catch (e) {
-      showColibriToast('投票失败',
+      showColibriToast(LKeys.apiVoteFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -655,8 +775,8 @@ class ColibriPostPoll extends StatelessWidget {
           children: [
             const Icon(Icons.public_rounded, size: 16, color: cLightText),
             const SizedBox(width: 4),
-            const Text('公开投票',
-                style: TextStyle(fontSize: 13, color: cLightText)),
+            Text(LKeys.feedPublicPoll.tr,
+                style: const TextStyle(fontSize: 13, color: cLightText)),
           ],
         ),
         const SizedBox(height: 8),
@@ -676,7 +796,12 @@ class ColibriPostPoll extends StatelessWidget {
         // 底部：票数 - 状态
         Center(
           child: Text(
-            '共 ${poll.totalVotes} 票 · ${poll.isExpired ? '已结束' : '进行中'}',
+            LKeys.feedPollVotesSummary.trParams({
+              'p1': '${poll.totalVotes}',
+              'p2': poll.isExpired
+                  ? LKeys.feedPollEnded.tr
+                  : LKeys.feedPollActive.tr,
+            }),
             style: const TextStyle(fontSize: 12, color: cLightText),
           ),
         ),
@@ -809,11 +934,55 @@ class ColibriFullScreenVideo extends StatefulWidget {
 
 class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
   double? _dragMs; // 拖动进度条时的本地值（毫秒）
+  bool _controlsVisible = true;
+  bool _wasPlaying = false;
+  Timer? _controlsTimer;
 
   @override
   void initState() {
     super.initState();
+    _wasPlaying = widget.controller.value.isPlaying;
+    widget.controller.addListener(_syncPlaybackState);
     _enterImmersive();
+    _scheduleControlsHide();
+  }
+
+  void _syncPlaybackState() {
+    final playing = widget.controller.value.isPlaying;
+    if (playing == _wasPlaying) return;
+    _wasPlaying = playing;
+    if (playing) {
+      _scheduleControlsHide();
+    } else {
+      _controlsTimer?.cancel();
+      if (mounted) setState(() => _controlsVisible = true);
+    }
+  }
+
+  void _scheduleControlsHide() {
+    _controlsTimer?.cancel();
+    if (!widget.controller.value.isPlaying || _dragMs != null) return;
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && widget.controller.value.isPlaying && _dragMs == null) {
+        setState(() => _controlsVisible = false);
+      }
+    });
+  }
+
+  void _showControlsTemporarily() {
+    setState(() => _controlsVisible = true);
+    _scheduleControlsHide();
+  }
+
+  void _handleSurfaceTap() {
+    if (!widget.controller.value.isPlaying) {
+      _toggle();
+    } else if (_controlsVisible) {
+      _controlsTimer?.cancel();
+      setState(() => _controlsVisible = false);
+    } else {
+      _showControlsTemporarily();
+    }
   }
 
   /// 横版视频（宽>高）强制横屏，竖版视频保持竖屏；隐藏系统栏。
@@ -839,6 +1008,8 @@ class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
 
   @override
   void dispose() {
+    _controlsTimer?.cancel();
+    widget.controller.removeListener(_syncPlaybackState);
     _exitImmersive();
     super.dispose();
   }
@@ -847,9 +1018,12 @@ class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
     final c = widget.controller;
     if (c.value.isPlaying) {
       await c.pause();
+      _controlsTimer?.cancel();
+      if (mounted) setState(() => _controlsVisible = true);
     } else {
       if (c.value.isCompleted) await c.seekTo(Duration.zero);
       await c.play();
+      _showControlsTemporarily();
     }
   }
 
@@ -883,9 +1057,9 @@ class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _toggle,
+                  onTap: _handleSurfaceTap,
                   child: Center(
-                    child: value.isPlaying
+                    child: value.isPlaying || !_controlsVisible
                         ? const SizedBox.shrink()
                         : Container(
                             padding: const EdgeInsets.all(16),
@@ -902,10 +1076,17 @@ class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
                 top: 8,
                 left: 4,
                 child: SafeArea(
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded,
-                        color: Colors.white),
-                    onPressed: () => Get.back(),
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: AnimatedOpacity(
+                      opacity: _controlsVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded,
+                            color: Colors.white),
+                        onPressed: () => Get.back(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -915,64 +1096,77 @@ class _ColibriFullScreenVideoState extends State<ColibriFullScreenVideo> {
                 right: 0,
                 bottom: 0,
                 child: SafeArea(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _toggle,
-                          child: Icon(
-                              value.isPlaying
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded,
-                              color: Colors.white,
-                              size: 28),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(_fmt(_dragMs ?? pos),
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12)),
-                        Expanded(
-                          child: SliderTheme(
-                            data: const SliderThemeData(
-                              trackHeight: 2,
-                              thumbShape:
-                                  RoundSliderThumbShape(enabledThumbRadius: 5),
-                              overlayShape:
-                                  RoundSliderOverlayShape(overlayRadius: 10),
-                              activeTrackColor: Colors.white,
-                              inactiveTrackColor: Colors.white24,
-                              thumbColor: Colors.white,
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: AnimatedOpacity(
+                      opacity: _controlsVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _toggle,
+                              child: Icon(
+                                  value.isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 28),
                             ),
-                            child: Slider(
-                              value: dur > 0
-                                  ? (_dragMs ?? pos).clamp(0, dur).toDouble()
-                                  : 0,
-                              max: dur > 0 ? dur.toDouble() : 1.0,
-                              onChanged: dur > 0
-                                  ? (v) => setState(() => _dragMs = v)
-                                  : null,
-                              onChangeEnd: (v) {
-                                c.seekTo(Duration(milliseconds: v.round()));
-                                setState(() => _dragMs = null);
-                              },
+                            const SizedBox(width: 8),
+                            Text(_fmt(_dragMs ?? pos),
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12)),
+                            Expanded(
+                              child: SliderTheme(
+                                data: const SliderThemeData(
+                                  trackHeight: 2,
+                                  thumbShape: RoundSliderThumbShape(
+                                      enabledThumbRadius: 5),
+                                  overlayShape: RoundSliderOverlayShape(
+                                      overlayRadius: 10),
+                                  activeTrackColor: Colors.white,
+                                  inactiveTrackColor: Colors.white24,
+                                  thumbColor: Colors.white,
+                                ),
+                                child: Slider(
+                                  value: dur > 0
+                                      ? (_dragMs ?? pos)
+                                          .clamp(0, dur)
+                                          .toDouble()
+                                      : 0,
+                                  max: dur > 0 ? dur.toDouble() : 1.0,
+                                  onChangeStart: dur > 0
+                                      ? (_) => _controlsTimer?.cancel()
+                                      : null,
+                                  onChanged: dur > 0
+                                      ? (v) => setState(() => _dragMs = v)
+                                      : null,
+                                  onChangeEnd: (v) {
+                                    c.seekTo(Duration(milliseconds: v.round()));
+                                    setState(() => _dragMs = null);
+                                    _scheduleControlsHide();
+                                  },
+                                ),
+                              ),
                             ),
-                          ),
+                            Text(dur > 0 ? _fmt(dur) : '',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12)),
+                            const SizedBox(width: 8),
+                            // 退出全屏（返回帖内继续播放）
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => Get.back(),
+                              child: const Icon(Icons.fullscreen_exit_rounded,
+                                  color: Colors.white, size: 26),
+                            ),
+                          ],
                         ),
-                        Text(dur > 0 ? _fmt(dur) : '',
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12)),
-                        const SizedBox(width: 8),
-                        // 退出全屏（返回帖内继续播放）
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => Get.back(),
-                          child: const Icon(Icons.fullscreen_exit_rounded,
-                              color: Colors.white, size: 26),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

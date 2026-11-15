@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:untitled/common/managers/logger.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/localization/languages.dart';
@@ -28,26 +30,30 @@ class BaseController extends GetxController {
     update();
   }
 
-  loader({double? value}) {
+  void loader({double? value}) {
     Get.dialog(
-        Center(
-          child: CircularProgressIndicator(
-            color: cPrimary,
+      Center(
+        child: Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: cWhite,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: cBlack.withValues(alpha: 0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
+          alignment: Alignment.center,
+          child: const CupertinoActivityIndicator(radius: 13),
         ),
-        barrierColor: Colors.transparent);
-    // showDialog(
-    //   context: Get.context!,
-    //   // barrierDismissible: true,
-    //   barrierDismissible: false,
-    //   builder: (context) {
-    //     return const Center(
-    //       child: CircularProgressIndicator(
-    //         color: cPrimary,
-    //       ),
-    //     );
-    //   },
-    // );
+      ),
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.12),
+    );
   }
 
   void materialSnackBar(String title,
@@ -74,8 +80,11 @@ class BaseController extends GetxController {
         type: type, message: message, onCompletion: onCompletion);
   }
 
-  void showConfirmationSheet(
-      {required desc, required buttonTitle, required onTap}) {
+  void showConfirmationSheet({
+    required Object desc,
+    required Object buttonTitle,
+    required VoidCallback onTap,
+  }) {
     showColibriConfirmDialog(
       Get.context!,
       icon: Icons.warning_amber_rounded,
@@ -92,12 +101,12 @@ class BaseController extends GetxController {
   void handleURL({required String url}) async {
     var urlString = url;
     if (!urlString.startsWith('http')) {
-      urlString = 'https:\\\\' + urlString;
+      urlString = 'https:\\\\$urlString';
     }
     final Uri uri = Uri.parse(urlString);
 
     if (!await launchUrl(uri)) {
-      print('Could not launch $uri');
+      Loggers.error('Could not launch $uri');
     }
   }
 

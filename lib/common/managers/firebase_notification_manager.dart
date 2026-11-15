@@ -60,12 +60,10 @@ class FirebaseNotificationManager {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.data[Param.conversationId] ==
           SessionManager.shared.getStoredConversation()) {
-        print('In Same Chat');
         return;
       }
       if (message.messageId != newMessageId || Platform.isAndroid) {
         newMessageId = message.messageId!;
-        print('Notification: ${message.messageId}');
         showNotification(message);
       }
     });
@@ -106,11 +104,10 @@ class FirebaseNotificationManager {
       FirebaseMessaging.instance.getToken().then(
         (value) {
           if (value?.isEmpty == true || value == null) {
-            Loggers.error('Token: $value');
+            Loggers.warning('FCM registration token unavailable');
             done('No Token');
           } else {
             cachedFcmToken = value;
-            Loggers.success('Token: $value');
             done(value);
           }
         },
@@ -134,13 +131,14 @@ class FirebaseNotificationManager {
     if (user == null || user.isPushNotifications == 1) {
       await firebaseMessaging
           .subscribeToTopic('${topic}_${Platform.isIOS ? 'ios' : 'android'}')
-          .onError((error, stackTrace) {
-        print(error);
+          .onError((_, __) {
+        Loggers.warning('FCM topic subscription failed');
       });
 
-      if (kDebugMode)
+      if (kDebugMode) {
         await firebaseMessaging.subscribeToTopic(
             'test_${topic}_${Platform.isIOS ? 'ios' : 'android'}');
+      }
     }
   }
 
@@ -148,9 +146,10 @@ class FirebaseNotificationManager {
     await firebaseMessaging
         .unsubscribeFromTopic('${topic}_${Platform.isIOS ? 'ios' : 'android'}');
 
-    if (kDebugMode)
+    if (kDebugMode) {
       await firebaseMessaging.subscribeToTopic(
           'test_${topic}_${Platform.isIOS ? 'ios' : 'android'}');
+    }
   }
 
   bool hasListenerSet = false;
@@ -159,20 +158,15 @@ class FirebaseNotificationManager {
     if (hasListenerSet) {
       return;
     }
-    ;
     hasListenerSet = true;
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("notification aavi: ${message.toMap()}");
-
       if (message.data[Param.conversationId] ==
           SessionManager.shared.getStoredConversation()) {
-        print('In Same Chat');
         return;
       }
 
       if (message.messageId != newMessageId || Platform.isAndroid) {
         newMessageId = message.messageId!;
-        print('Notification: ${message.messageId}');
         showNotification(message);
       }
     });

@@ -5,6 +5,7 @@ import 'package:untitled/common/managers/app_command_handler.dart';
 import 'package:untitled/common/managers/bookmark_store.dart';
 import 'package:untitled/common/managers/chat_unread_store.dart';
 import 'package:untitled/common/managers/session_manager.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/login_screen/login_screen.dart';
 import 'package:untitled/utilities/const.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,11 +25,12 @@ class ColibriBlockedScreen extends StatelessWidget {
 
   bool get _isSuspended => status == 'suspended';
 
-  String get _title => _isSuspended ? '账号已被停用' : '账号已被封禁';
+  String get _title => _isSuspended
+      ? LKeys.socialAccountSuspended.tr
+      : LKeys.socialAccountBanned.tr;
 
-  String get _defaultDesc => _isSuspended
-      ? '您的账号因违反社区规范已被停用。如有疑问，请联系客服申诉。'
-      : '您的账号因违反社区规范已被封禁。如有疑问，请联系客服申诉。';
+  String get _defaultDesc =>
+      _isSuspended ? LKeys.socialSuspendedDesc.tr : LKeys.socialBannedDesc.tr;
 
   void _logout() {
     // 复位封禁状态（用户手动退出，之后回登录页重新走认证流程）
@@ -114,7 +116,8 @@ class ColibriBlockedScreen extends StatelessWidget {
                               scheme: 'mailto',
                               path: supportEmail,
                               queryParameters: {
-                                'subject': '账号申诉 - $_title',
+                                'subject': LKeys.socialAppealSubject
+                                    .trParams({'p1': '${_title}'}),
                               },
                             );
                             await launchUrl(uri,
@@ -130,7 +133,7 @@ class ColibriBlockedScreen extends StatelessWidget {
                           ),
                           icon: const Icon(Icons.mail_outline_rounded,
                               color: cLightIcon, size: 20),
-                          label: Text('联系客服申诉',
+                          label: Text(LKeys.socialContactSupport.tr,
                               style: MyTextStyle.gilroyBold(
                                   size: 15, color: Colors.white)),
                         ),
@@ -151,7 +154,7 @@ class ColibriBlockedScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-                        child: Text('退出登录',
+                        child: Text(LKeys.settingsLogOut.tr,
                             style: MyTextStyle.gilroyBold(
                                 size: 16, color: Colors.white)),
                       ),
@@ -159,7 +162,7 @@ class ColibriBlockedScreen extends StatelessWidget {
                     const SizedBox(height: 14),
 
                     Text(
-                      '如有疑问请联系平台客服',
+                      LKeys.socialSupportNote.tr,
                       style: MyTextStyle.gilroyRegular(
                           size: 12, color: cLightText),
                     ),

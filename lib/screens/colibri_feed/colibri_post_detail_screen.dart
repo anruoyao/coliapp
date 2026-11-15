@@ -8,6 +8,7 @@ import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/widgets/colibri_mentions.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/guest_auth_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_card.dart';
 import 'package:untitled/screens/colibri_feed/comments/comment_thread_controller.dart';
@@ -54,7 +55,7 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
 
   Future<void> _sendComment() async {
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '评论');
+      AuthGate.requireLogin(() {}, feature: LKeys.feedComment.tr);
       return;
     }
     final content = _commentInput.text.trim();
@@ -65,14 +66,16 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
       _commentInput.clear();
       HapticManager.shared.light();
     } else {
-      showColibriToast('评论失败',
-          message: '请稍后重试', backgroundColor: cRed, colorText: Colors.white);
+      showColibriToast(LKeys.apiCommentFailed.tr,
+          message: LKeys.feedTryAgainLater.tr,
+          backgroundColor: cRed,
+          colorText: Colors.white);
     }
   }
 
   void _onReplyTap(ColibriComment comment) {
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '回复评论');
+      AuthGate.requireLogin(() {}, feature: LKeys.postReplyCommentFeature.tr);
       return;
     }
     _controller.setReplyTarget(comment);
@@ -81,7 +84,7 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
 
   Future<void> _onLikeTap(ColibriComment comment, String unifiedId) async {
     if (GuestSession.i.isGuest) {
-      AuthGate.requireLogin(() {}, feature: '评论点赞');
+      AuthGate.requireLogin(() {}, feature: LKeys.postLikeCommentFeature.tr);
       return;
     }
     try {
@@ -101,16 +104,22 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
       icon: comment.isRoot
           ? Icons.speaker_notes_off_outlined
           : Icons.delete_outline_rounded,
-      title: comment.isRoot ? '删除这条评论？' : '删除这条回复？',
-      message: comment.isRoot ? '评论及其全部回复将被永久删除，无法恢复' : '回复将被永久删除，无法恢复',
-      confirmText: '删除',
+      title: comment.isRoot
+          ? LKeys.postDeleteCommentTitle.tr
+          : LKeys.postDeleteReplyTitle.tr,
+      message: comment.isRoot
+          ? LKeys.postDeleteCommentDesc.tr
+          : LKeys.postDeleteReplyDesc.tr,
+      confirmText: LKeys.feedDelete.tr,
       onConfirm: () async {
         try {
           await _controller.delete(comment);
           return true;
         } catch (_) {
-          showColibriToast('删除失败',
-              message: '请稍后重试', backgroundColor: cRed, colorText: Colors.white);
+          showColibriToast(LKeys.feedDeleteFailed.tr,
+              message: LKeys.feedTryAgainLater.tr,
+              backgroundColor: cRed,
+              colorText: Colors.white);
           return false;
         }
       },
@@ -139,8 +148,8 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: const Text('帖子',
-            style: TextStyle(
+        title: Text(LKeys.feedPost.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
@@ -168,10 +177,10 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
                     ColibriPostCard(post: _controller.post, onTap: null),
                     _buildHeader(),
                     if (_controller.threads.isEmpty)
-                      const ColibriEmptyState(
+                      ColibriEmptyState(
                         icon: Icons.chat_bubble_outline_rounded,
-                        title: '还没有评论',
-                        subtitle: '抢沙发，说点什么吧',
+                        title: LKeys.postNoCommentsYet.tr,
+                        subtitle: LKeys.postFirstCommentPrompt.tr,
                         topSpacing: 24,
                       )
                     else
@@ -212,8 +221,8 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
       child: Row(
         children: [
-          const Text('评论',
-              style: TextStyle(
+          Text(LKeys.feedComment.tr,
+              style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.w800, color: cMainText)),
           const SizedBox(width: 8),
           Container(
@@ -249,7 +258,8 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
         top: false,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => AuthGate.requireLogin(() {}, feature: '评论'),
+          onTap: () =>
+              AuthGate.requireLogin(() {}, feature: LKeys.feedComment.tr),
           child: Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
             height: 46,
@@ -264,12 +274,13 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
               children: [
                 Icon(Icons.lock_outline_rounded, size: 16, color: cLightText),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('登录后发表评论…',
-                      style: TextStyle(color: cLightText, fontSize: 14.5)),
+                Expanded(
+                  child: Text(LKeys.postSignInToCommentHint.tr,
+                      style:
+                          const TextStyle(color: cLightText, fontSize: 14.5)),
                 ),
-                const Text('去登录',
-                    style: TextStyle(
+                Text(LKeys.postGoToSignIn.tr,
+                    style: const TextStyle(
                         color: cGreen,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700)),
@@ -313,7 +324,8 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                '回复 @${target.userUsername}',
+                                LKeys.postReplyToUser
+                                    .trParams({'p1': target.userUsername}),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -338,8 +350,9 @@ class _ColibriPostDetailScreenState extends State<ColibriPostDetailScreen> {
                   child: Obx(() {
                     final target = _controller.replyTarget.value;
                     final hint = target != null
-                        ? '回复 @${target.userUsername}...'
-                        : '写评论...';
+                        ? LKeys.postReplyingToUser
+                            .trParams({'p1': target.userUsername})
+                        : LKeys.postWriteCommentHint.tr;
                     return MentionField(
                       controller: _commentInput,
                       focusNode: _commentFocus,

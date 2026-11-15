@@ -1,8 +1,9 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 全局页面转场：淡入叠加轻微放大，保持上一页作为过渡背景。
@@ -39,7 +40,7 @@ class ColibriPageTransition extends CustomTransition {
 /// - [ColibriIconChip]    软底色圆角图标 chip（菜单/设置行通用）
 /// - [ColibriPillButton]  胶囊按钮（关注/私信/主操作）
 /// - [ColibriSectionLabel] 分组小标题
-/// - [showColibriConfirmDialog] 统一确认弹窗（磨砂遮罩 + 弹性缩放入场 + loading 态确认按钮）
+/// - [showColibriConfirmDialog] 统一系统风格确认弹窗
 
 /// 以扩张动画打开设置详情页，保持设置入口与详情页的视觉连续性。
 Future<void> openColibriSettingPage(BuildContext context, Widget page) {
@@ -114,136 +115,34 @@ class _ColibriSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: [
-          BoxShadow(
-            color: cBlack.withValues(alpha: 0.16),
-            blurRadius: 28,
-            offset: const Offset(0, -6),
+    return ColibriSheetSurface(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ColibriSheetHeader(
+            title: title,
+            trailing: const ColibriSheetCloseButton(),
+          ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return ColibriSheetActionRow(
+                  title: item.label,
+                  subtitle: item.subtitle,
+                  icon: item.icon,
+                  destructive: item.danger,
+                  showDivider: index < items.length - 1,
+                  onTap: () => Navigator.of(context).pop(index),
+                );
+              },
+            ),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xF7FFFFFF),
-            border: Border.all(color: const Color(0x33FFFFFF), width: 0.8),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
-                  child: SizedBox(
-                    height: 42,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            tooltip: '关闭',
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon:
-                                const Icon(Icons.close_rounded, color: cBlack),
-                            style: IconButton.styleFrom(
-                              backgroundColor: cWhite,
-                              foregroundColor: cBlack,
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(42, 42),
-                              shape: const CircleBorder(),
-                            ),
-                          ),
-                        ),
-                        if (title != null)
-                          Text(
-                            title!,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: cMainText,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cLightIcon.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.only(bottom: 10),
-                    children: [
-                      for (var index = 0; index < items.length; index++)
-                        _ColibriSheetItemRow(
-                          item: items[index],
-                          index: index,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ColibriSheetItemRow extends StatelessWidget {
-  final ColibriSheetItem item;
-  final int index;
-
-  const _ColibriSheetItemRow({required this.item, required this.index});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => Navigator.of(context).pop(index),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-        child: Row(
-          children: [
-            ColibriIconChip(icon: item.icon, danger: item.danger),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: item.danger ? cRed : cMainText,
-                    ),
-                  ),
-                  if (item.subtitle != null && item.subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(item.subtitle!,
-                        style:
-                            const TextStyle(fontSize: 12, color: cLightText)),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -482,248 +381,150 @@ class ColibriSectionLabel extends StatelessWidget {
 
 // ===================== 确认弹窗 =====================
 
-/// 统一确认弹窗：磨砂遮罩 + 白色圆角卡片 + 弹性缩放入场 + 确认按钮 loading 态。
+/// 统一系统风格确认弹窗，异步确认期间显示进度状态。
 ///
-/// 返回 `true` 表示用户已确认且 [onConfirm] 执行成功（弹窗已关闭）；
-/// `false` 表示用户取消、点遮罩关闭或 [onConfirm] 返回 false（失败时弹窗保留，调用方自行提示）。
-///
-/// - [danger] 为 true 时确认按钮与图标使用红色系（删除/举报等破坏性操作），
-///   false 时使用品牌绿（常规确认）。
-/// - [onConfirm] 为空则点击确认立即关闭返回 true。
+/// 返回 `true` 表示用户确认且 [onConfirm] 执行成功；取消、关闭或确认失败时返回 `false`。
+/// [onConfirm] 为空时，点击确认立即返回 `true`。
 Future<bool> showColibriConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
   required IconData icon,
-  String confirmText = '确认',
-  String cancelText = '取消',
+  String? confirmText,
+  String? cancelText,
   bool danger = true,
   Future<bool> Function()? onConfirm,
 }) {
-  return showColibriBottomSheet<bool>(
-    Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      child: _ColibriConfirmDialog(
-        title: title,
-        message: message,
-        icon: icon,
-        confirmText: confirmText,
-        cancelText: cancelText,
-        danger: danger,
-        onConfirm: onConfirm,
-      ),
-    ),
+  final resolvedConfirmText = confirmText ?? LKeys.commonConfirm.tr;
+  final resolvedCancelText = cancelText ?? LKeys.commonCancel.tr;
+  var busy = false;
+  return showDialog<bool>(
     context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.36),
-    useSafeArea: true,
-    isScrollControlled: true,
-    constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
-  ).then((value) => value == true);
-}
-
-class _ColibriConfirmDialog extends StatefulWidget {
-  final String title;
-  final String message;
-  final IconData icon;
-  final String confirmText;
-  final String cancelText;
-  final bool danger;
-  final Future<bool> Function()? onConfirm;
-
-  const _ColibriConfirmDialog({
-    required this.title,
-    required this.message,
-    required this.icon,
-    required this.confirmText,
-    required this.cancelText,
-    required this.danger,
-    this.onConfirm,
-  });
-
-  @override
-  State<_ColibriConfirmDialog> createState() => _ColibriConfirmDialogState();
-}
-
-class _ColibriConfirmDialogState extends State<_ColibriConfirmDialog> {
-  bool _busy = false;
-
-  Future<void> _onConfirm() async {
-    if (_busy) return;
-    if (widget.onConfirm == null) {
-      Navigator.of(context).pop(true);
-      return;
-    }
-    setState(() => _busy = true);
-    final ok = await widget.onConfirm!();
-    if (!mounted) return;
-    if (ok) {
-      Navigator.of(context).pop(true);
-    } else {
-      // 失败：保留弹窗，调用方已自行提示错误
-      setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = widget.danger ? cRed : cGreen;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: 320,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: cBlack.withValues(alpha: 0.16),
-              blurRadius: 28,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: LiquidGlassLens(
-          style: const LiquidGlassStyle(
-            shape: LiquidGlassShape.continuousRoundedRectangle(
-              cornerRadius: 26,
-              clipQuality: LiquidGlassClipQuality.exact,
-              borderWidth: 0.8,
-              lightIntensity: 1,
-              lightDirection: 45,
-              borderType: OpticalBorder(
-                borderSaturation: 1.1,
-                ambientIntensity: 0.9,
-                borderSolidity: 0.75,
+    barrierColor: cBlack.withValues(alpha: 0.28),
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xE62C2C2E)
+                    : const Color(0xEFFFFFFF),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.16)
+                      : Colors.white.withValues(alpha: 0.72),
+                ),
+                borderRadius: BorderRadius.circular(18),
               ),
-            ),
-            appearance: LiquidGlassAppearance(
-              color: Color(0xF7FFFFFF),
-              blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-            ),
-            refraction: LiquidGlassRefraction(
-              distortion: 0.07,
-              distortionWidth: 16,
-              chromaticAberration: 0.0005,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 图标：软底圆形 + 细描边环
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.10),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: accent.withValues(alpha: 0.22), width: 1.5),
-                  ),
-                  child: Icon(widget.icon, size: 27, color: accent),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  widget.title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: cMainText,
-                      height: 1.3),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  widget.message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13.5, color: cLightText, height: 1.55),
-                ),
-                const SizedBox(height: 22),
-                // 按钮行
-                Row(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _ConfirmButton(
-                        text: widget.cancelText,
-                        onTap: _busy
-                            ? null
-                            : () => Navigator.of(context).pop(false),
-                      ),
+                    Row(
+                      children: [
+                        Icon(icon,
+                            size: 21,
+                            color: danger
+                                ? const Color(0xFFFF3B30)
+                                : Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: _ConfirmButton(
-                        text: widget.confirmText,
-                        filled: true,
-                        accent: accent,
-                        loading: _busy,
-                        onTap: _onConfirm,
-                      ),
+                    const SizedBox(height: 10),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                    ),
+                    const SizedBox(height: 22),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(64, 44),
+                            foregroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                          onPressed: busy
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(false),
+                          child: Text(resolvedCancelText),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(64, 44),
+                            foregroundColor: danger
+                                ? const Color(0xFFFF3B30)
+                                : Theme.of(context).colorScheme.primary,
+                            textStyle:
+                                const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  if (onConfirm == null) {
+                                    Navigator.of(dialogContext).pop(true);
+                                    return;
+                                  }
+                                  setDialogState(() => busy = true);
+                                  try {
+                                    final ok = await onConfirm();
+                                    if (!dialogContext.mounted) return;
+                                    if (ok) {
+                                      Navigator.of(dialogContext).pop(true);
+                                    } else {
+                                      setDialogState(() => busy = false);
+                                    }
+                                  } catch (_) {
+                                    if (dialogContext.mounted) {
+                                      setDialogState(() => busy = false);
+                                    }
+                                  }
+                                },
+                          child: busy
+                              ? SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: danger
+                                        ? const Color(0xFFFF3B30)
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                )
+                              : Text(resolvedConfirmText),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// 弹窗按钮：灰色软底（取消）/ 彩色实底（确认，danger 红字白 / 常规绿底黑字）。
-class _ConfirmButton extends StatelessWidget {
-  final String text;
-  final bool filled;
-  final Color? accent; // filled 时的底色
-  final bool loading;
-  final VoidCallback? onTap;
-
-  const _ConfirmButton({
-    required this.text,
-    this.filled = false,
-    this.accent,
-    this.loading = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isRed = accent == cRed;
-    final borderRadius = BorderRadius.circular(23);
-    return Material(
-      color: filled ? accent : cLightBg,
-      borderRadius: borderRadius,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: onTap,
-        child: SizedBox(
-          height: 46,
-          child: Center(
-            child: loading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: isRed ? Colors.white : cBlack,
-                    ),
-                  )
-                : Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color:
-                          filled ? (isRed ? Colors.white : cBlack) : cMainText,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  ).then((value) => value == true);
 }

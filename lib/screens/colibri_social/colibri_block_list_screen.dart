@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_social_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 import 'package:untitled/screens/colibri_social/colibri_profile_screen.dart';
 import 'package:untitled/utilities/const.dart';
@@ -47,16 +48,16 @@ class _ColibriBlockListScreenState extends State<ColibriBlockListScreen> {
     try {
       if (_isMuted) {
         await ColibriSocialService.shared.toggleMute(u.id);
-        showColibriToast('已取消静音',
+        showColibriToast(LKeys.socialUnmuted.tr,
             message: '', backgroundColor: cGreen, colorText: Colors.white);
       } else {
         await ColibriSocialService.shared.toggleBlock(u.id);
-        showColibriToast('已解除拉黑',
+        showColibriToast(LKeys.socialUnblocked.tr,
             message: '', backgroundColor: cGreen, colorText: Colors.white);
       }
       setState(() => _blocked.removeWhere((x) => x.id == u.id));
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -70,7 +71,8 @@ class _ColibriBlockListScreenState extends State<ColibriBlockListScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: Text(_isMuted ? '静音列表' : '黑名单',
+        title: Text(
+            _isMuted ? LKeys.settingsMuteList.tr : LKeys.settingsBlockList.tr,
             style:
                 const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
@@ -79,7 +81,10 @@ class _ColibriBlockListScreenState extends State<ColibriBlockListScreen> {
           ? const Center(child: CircularProgressIndicator(color: cPrimary))
           : _blocked.isEmpty
               ? Center(
-                  child: Text(_isMuted ? '暂无静音用户' : '暂无拉黑用户',
+                  child: Text(
+                      _isMuted
+                          ? LKeys.socialNoMutedUsers.tr
+                          : LKeys.socialNoBlockedUsers.tr,
                       style: const TextStyle(color: cLightText)))
               : ListView.separated(
                   itemCount: _blocked.length,
@@ -117,8 +122,8 @@ class _ColibriBlockListScreenState extends State<ColibriBlockListScreen> {
                               const TextStyle(fontSize: 12, color: cLightText)),
                       trailing: TextButton(
                         onPressed: () => _remove(u),
-                        child:
-                            const Text('解除', style: TextStyle(color: cPrimary)),
+                        child: Text(LKeys.socialRemove.tr,
+                            style: const TextStyle(color: cPrimary)),
                       ),
                       onTap: () => Get.to(
                           () => ColibriProfileScreen(username: u.username),

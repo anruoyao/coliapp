@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:untitled/common/api_service/colibri_social_service.dart';
 import 'package:untitled/common/managers/app_command_handler.dart';
 import 'package:untitled/common/managers/bookmark_store.dart';
@@ -10,9 +9,13 @@ import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/managers/session_manager.dart';
 import 'package:untitled/common/widgets/guest_auth_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_chat/chats_screen.dart';
+import 'package:untitled/screens/colibri_home/colibri_home_navigation.dart';
+import 'package:untitled/screens/colibri_home/colibri_home_tab.dart';
 import 'package:untitled/screens/colibri_feed/colibri_create_post_screen.dart';
 import 'package:untitled/screens/colibri_feed/colibri_feed_screen.dart';
+import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/screens/colibri_guest/guest_locked_view.dart';
 import 'package:untitled/screens/colibri_guest/guest_me_page.dart';
 import 'package:untitled/screens/colibri_social/colibri_notifications_screen.dart';
@@ -36,9 +39,18 @@ class ColibriHomeScreen extends StatefulWidget {
 
 class _ColibriHomeScreenState extends State<ColibriHomeScreen>
     with WidgetsBindingObserver {
+  static const double _navBarHeight = ColibriHomeNavigation.height;
+  static const double _navBarBottomMargin = 0;
+  static const double _createButtonGap = 24;
+
   int _index = 0;
+  double _tabDirection = 1;
   int _notifUnread = 0; // 社交通知未读
   final Set<int> _visitedTabs = {0};
+  final GlobalKey<ColibriFeedScreenState> _feedKey =
+      GlobalKey<ColibriFeedScreenState>();
+  final GlobalKey<ColibriProfileScreenState> _profileKey =
+      GlobalKey<ColibriProfileScreenState>();
 
   bool get _isGuest => GuestSession.i.isGuest;
 
@@ -46,7 +58,18 @@ class _ColibriHomeScreenState extends State<ColibriHomeScreen>
   /// 一条通知触发 N 次拉取，和聊天页叠加会拖垮限流）。
   late final void Function(dynamic) _onNotification = _handleNotification;
 
-  void _handleNotification(dynamic _) => _refreshNotifUnread();
+  /// 用户私有频道的广播通知。
+  /// - chat.notification：聊天消息提示，刷新聊天未读角标（会话列表频道在
+  ///   首次打开聊天 Tab 前尚未订阅，靠这里兜底实时红点）；
+  /// - 其余（main.notification 等）：社交通知，刷新通知未读数。
+  void _handleNotification(dynamic payload) {
+    final type = payload is Map ? payload['type']?.toString() : null;
+    if (type == 'chat.notification') {
+      ChatUnreadStore.i.refreshNow();
+      return;
+    }
+    _refreshNotifUnread();
+  }
 
   @override
   void initState() {
@@ -108,9 +131,21 @@ class _ColibriHomeScreenState extends State<ColibriHomeScreen>
   }
 
   Future<void> _openCreatePost() async {
-    await Get.to(() => const CreatePostScreen(), opaque: false);
-    if (Get.isRegistered<ColibriFeedController>()) {
-      Get.find<ColibriFeedController>().refreshActive();
+    final sourceIndex = _index;
+    final sourceFeedTab =
+        sourceIndex == 0 ? _feedKey.currentState?.selectedFeedTabIndex : null;
+    final publishedPost = await Get.to<ColibriPost>(
+      () => const CreatePostScreen(),
+      opaque: false,
+    );
+    if (publishedPost == null || !mounted) return;
+    if (sourceIndex == 0 && sourceFeedTab != null) {
+      _feedKey.currentState?.showPublishedPost(
+        publishedPost,
+        following: sourceFeedTab == 0,
+      );
+    } else if (sourceIndex == 3) {
+      _profileKey.currentState?.showPublishedPost(publishedPost);
     }
   }
 
@@ -119,7 +154,7 @@ class _ColibriHomeScreenState extends State<ColibriHomeScreen>
       HapticManager.shared.selection();
       // 访客：搜索/发现为登录后能力，弹引导而不打开搜索页
       if (_isGuest) {
-        AuthGate.requireLogin(() {}, feature: '搜索与发现');
+        AuthGate.requireLogin(() {}, feature: LKeys.homeSearchAndDiscovery.tr);
         return;
       }
       // 搜索：以独立页打开，不切换底部 Tab
@@ -138,151 +173,57 @@ class _ColibriHomeScreenState extends State<ColibriHomeScreen>
         }
       }
     }
-    final pageIndex = i > 1 ? i - 1 : i;
+    _selectPage(i > 1 ? i - 1 : i);
+  }
+
+  void _selectPage(int pageIndex) {
+    if (_index == pageIndex) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
+      _tabDirection = pageIndex > _index ? 1 : -1;
       _index = pageIndex;
       _visitedTabs.add(pageIndex);
     });
   }
 
-  /// 导航项索引 = 栈索引偏移（第 2 项为搜索，不入 IndexedStack）。
+  /// 搜索为独立路由，不占用主页的 Tab 索引。
   int get _navIndex => _index >= 1 ? _index + 1 : 0;
 
-  Widget _buildNavigation(int notificationUnread, int chatUnread) {
-    return LiquidGlassBottomNavBar(
-      items: [
-        const LiquidGlassTabBarItem(
-          icon: Icons.home_outlined,
-          selectedIcon: Icons.home_rounded,
-          label: '首页',
-        ),
-        const LiquidGlassTabBarItem(
-          icon: Icons.search_outlined,
-          selectedIcon: Icons.search_rounded,
-          label: '搜索',
-        ),
-        _notificationNavItem(notificationUnread),
-        _chatNavItem(chatUnread),
-        const LiquidGlassTabBarItem(
-          icon: Icons.person_outline_rounded,
-          selectedIcon: Icons.person_rounded,
-          label: '我的',
-        ),
-      ],
-      selectedIndex: _navIndex,
-      onChanged: _onTab,
-      width: 360,
-      height: 68,
-      margin: const EdgeInsets.only(bottom: 10),
-      itemPadding: 6,
-      style: const LiquidGlassStyle(
-        shape: LiquidGlassShape.continuousRoundedRectangle(
-          cornerRadius: 34,
-          clipQuality: LiquidGlassClipQuality.exact,
-          borderWidth: 0,
-          lightIntensity: 1.0,
-          lightDirection: 80,
-        ),
-        // The bar is the quiet frosted substrate. The selected pill
-        // supplies the live refraction above it.
-        appearance: LiquidGlassAppearance(
-          color: Color(0xD9FFFFFF),
-          blur: LiquidGlassBlur(sigmaX: 12, sigmaY: 12),
-        ),
-        refraction: LiquidGlassRefraction(
-          distortion: 0,
-          distortionWidth: 1,
-          chromaticAberration: 0,
-        ),
-      ),
-      itemStyle: const LiquidGlassNavItemStyle(
-        selectedColor: cPrimary,
-        unselectedColor: cLightText,
-        iconSize: 23,
-        labelFontSize: 10.5,
-        selectedFontWeight: FontWeight.w700,
-      ),
-      pillStyle: LiquidGlassNavPillStyle(
-        mode: LiquidGlassPillMode.both,
-        animated: true,
-        keepGlassPillAtRest: true,
-        growHeight: 10,
-        travelStiffness: 280,
-        travelDamping: 31.4,
-        glassStyle: LiquidGlassStyle(
-          shape: LiquidGlassShape.continuousRoundedRectangle(
-            cornerRadius: 30,
-            clipQuality: LiquidGlassClipQuality.exact,
-            borderWidth: 0,
-          ),
-          appearance: const LiquidGlassAppearance(
-            color: Color(0x241D1D1F),
-            blur: LiquidGlassBlur(sigmaX: 0, sigmaY: 0),
-            enableInnerRadiusTransparent: true,
-          ),
-          refraction: const LiquidGlassRefraction(
-            magnification: 1.04,
-            refractionType: OpticalRefraction(
-              refraction: 0.14,
-              refractionWidth: 6,
-              depth: 0.08,
-            ),
-            chromaticAberration: 0,
-          ),
-        ),
-        rest: LiquidGlassStyle(
-          shape: LiquidGlassShape.continuousRoundedRectangle(
-            cornerRadius: 25,
-            clipQuality: LiquidGlassClipQuality.exact,
-          ),
-          appearance: LiquidGlassAppearance(color: cPrimarySoft),
-        ),
-      ),
-    );
-  }
-
-  LiquidGlassTabBarItem _notificationNavItem(int unread) {
-    return LiquidGlassTabBarItem.custom(
-      label: '通知',
-      iconBuilder: (context, glyph) => _navGlyph(
-        glyph: glyph,
-        unread: unread,
-        icon: glyph.selected
-            ? Icons.notifications_rounded
-            : Icons.notifications_none_rounded,
-      ),
-    );
-  }
-
-  LiquidGlassTabBarItem _chatNavItem(int unread) {
-    return LiquidGlassTabBarItem.custom(
-      label: '聊天',
-      iconBuilder: (context, glyph) => _navGlyph(
-        glyph: glyph,
-        unread: unread,
-        icon: glyph.selected
-            ? Icons.chat_bubble_rounded
-            : Icons.chat_bubble_outline_rounded,
-      ),
-    );
-  }
-
-  Widget _navGlyph({
-    required IconData icon,
-    required LiquidGlassGlyph glyph,
-    required int unread,
+  Widget _buildShell(
+    BuildContext context, {
+    required Widget content,
+    required int notificationUnread,
+    required int chatUnread,
+    required bool showCreateButton,
   }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, size: glyph.size, color: glyph.color),
-        if (unread > 0)
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    // 完整预留系统导航区域，并留出悬浮导航栏与手势条之间的间距。
+    final bottomOffset = bottomInset + _navBarBottomMargin;
+    return Scaffold(
+      backgroundColor: cWhite,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
           Positioned(
-            right: -8,
-            top: -6,
-            child: _UnreadBadge(count: unread, child: const SizedBox()),
+            left: 0,
+            right: 0,
+            bottom: bottomOffset,
+            child: ColibriHomeNavigation(
+              index: _navIndex,
+              notificationUnread: notificationUnread,
+              chatUnread: chatUnread,
+              onSelected: _onTab,
+            ),
           ),
-      ],
+          if (showCreateButton)
+            Positioned(
+              right: 20,
+              bottom: bottomOffset + _navBarHeight + _createButtonGap,
+              child: ColibriCreateButton(onPressed: _openCreatePost),
+            ),
+        ],
+      ),
     );
   }
 
@@ -292,96 +233,58 @@ class _ColibriHomeScreenState extends State<ColibriHomeScreen>
     // isGuest 读取 GuestSession.active（Rx），Obx 据此自动重建。
     return Obx(() {
       final guest = GuestSession.i.isGuest;
-      final content = IndexedStack(
-        index: _index,
+      final pages = <Widget>[
+        ColibriFeedScreen(key: _feedKey),
+        if (_visitedTabs.contains(1))
+          guest
+              ? const GuestLockedView(kind: GuestLockedKind.notifications)
+              : const ColibriNotificationsScreen(asTab: true)
+        else
+          const SizedBox.shrink(),
+        if (_visitedTabs.contains(2))
+          guest
+              ? const GuestLockedView(kind: GuestLockedKind.chats)
+              : const ColibriChatsScreen()
+        else
+          const SizedBox.shrink(),
+        if (_visitedTabs.contains(3) || !guest)
+          guest
+              ? GuestMePage(onBrowse: () => _selectPage(0))
+              : ColibriProfileScreen(
+                  key: _profileKey,
+                  active: _index == 3,
+                )
+        else
+          const SizedBox.shrink(),
+      ];
+      final content = Stack(
+        fit: StackFit.expand,
         children: [
-          const ColibriFeedScreen(),
-          if (_visitedTabs.contains(1))
-            guest
-                ? const GuestLockedView(kind: GuestLockedKind.notifications)
-                : const ColibriNotificationsScreen(asTab: true)
-          else
-            const SizedBox.shrink(),
-          if (_visitedTabs.contains(2))
-            guest
-                ? const GuestLockedView(kind: GuestLockedKind.chats)
-                : const ColibriChatsScreen()
-          else
-            const SizedBox.shrink(),
-          if (_visitedTabs.contains(3))
-            guest
-                ? GuestMePage(onBrowse: () => setState(() => _index = 0))
-                : const ColibriProfileScreen()
-          else
-            const SizedBox.shrink(),
+          for (var i = 0; i < pages.length; i++)
+            ColibriHomeTab(
+              active: _index == i,
+              direction: _tabDirection,
+              child: pages[i],
+            ),
         ],
       );
       return guest
-          ? LiquidGlassScaffold(
-              backgroundColor: cWhite,
-              body: content,
-              bottomNavigationBar: _buildNavigation(0, 0),
+          ? _buildShell(
+              context,
+              content: content,
+              notificationUnread: 0,
+              chatUnread: 0,
+              showCreateButton: false,
             )
           : Obx(
-              () => LiquidGlassScaffold(
-                backgroundColor: cWhite,
-                body: content,
-                useImpellerBackdrop: false,
-                realTimeCapture: false,
-                bottomNavigationBar: _buildNavigation(
-                  _notifUnread,
-                  ChatUnreadStore.i.total.value,
-                ),
-                lenses: [
-                  Positioned(
-                    right: 20,
-                    bottom: 96,
-                    child: GlassCreateButton(onPressed: _openCreatePost),
-                  ),
-                ],
+              () => _buildShell(
+                context,
+                content: content,
+                notificationUnread: _notifUnread,
+                chatUnread: ChatUnreadStore.i.total.value,
+                showCreateButton: _index == 0 || _index == 3,
               ),
             );
     });
   }
 }
-
-class _UnreadBadge extends StatelessWidget {
-  final int count;
-  final Widget child;
-
-  const _UnreadBadge({required this.count, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        child,
-        if (count > 0)
-          Positioned(
-            right: -8,
-            top: -6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              constraints: const BoxConstraints(minWidth: 16),
-              decoration: BoxDecoration(
-                color: cRed,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// 未读消息角标（红色小圆点 + 数字）。

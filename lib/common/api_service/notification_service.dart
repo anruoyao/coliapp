@@ -79,9 +79,7 @@ class NotificationService {
     http
         .post(Uri.parse(WebService.pushNotificationToSingleUser),
             headers: ApiService.shared.header, body: json.encode(inputData))
-        .then((value) {
-      print(value.body);
-    });
+        .ignore();
   }
 
   void getMyRooms(Function(List<RoomMember> rooms) completion) {

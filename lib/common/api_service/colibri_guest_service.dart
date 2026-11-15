@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 
@@ -51,7 +53,7 @@ class ColibriGuestService {
     final resp = await _api.get('${_prefix}bootstrap', auth: false);
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('访客初始化失败：响应缺少 data');
+      throw ColibriApiException(LKeys.guestInitFailed.tr);
     }
     final auth = data['auth'] is Map<String, dynamic>
         ? data['auth'] as Map<String, dynamic>
@@ -99,11 +101,11 @@ class ColibriGuestService {
     });
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('帖子不存在');
+      throw ColibriApiException(LKeys.apiPostNotFound.tr);
     }
     final postJson = data['post'];
     if (postJson is! Map<String, dynamic>) {
-      throw ColibriApiException('帖子不存在');
+      throw ColibriApiException(LKeys.apiPostNotFound.tr);
     }
     final commentsJson = data['comments'];
     final comments = commentsJson is List
@@ -158,13 +160,13 @@ class ColibriGuestService {
     final resp = await _api.get('${_prefix}profile/$username', auth: false);
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('用户不存在');
+      throw ColibriApiException(LKeys.apiUserNotFound.tr);
     }
     return ColibriProfile.fromJson(data);
   }
 
   /// 该用户的公开帖子（type=posts|media，cursor 分页；同样遵守访客可见性边界）。
-  Future<List<ColibriPost>> fetchProfilePosts(
+  Future<ColibriProfilePostsPage> fetchProfilePosts(
     String username, {
     int? cursor,
     String type = 'posts',
@@ -174,11 +176,6 @@ class ColibriGuestService {
       'filter[type]': type,
       if (cursor != null && cursor > 0) 'cursor': '$cursor',
     });
-    final data = resp['data'];
-    if (data is! List) return [];
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(ColibriPost.fromJson)
-        .toList();
+    return ColibriProfilePostsPage.fromJson(resp);
   }
 }

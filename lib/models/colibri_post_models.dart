@@ -2,6 +2,43 @@ const String colibriLikeUnifiedId = '2764-fe0f';
 
 /// ColibriPlus 时间线（Feed / 帖子 / 评论）数据模型。
 
+/// 个人主页帖子分页响应（包含置顶帖子与普通帖子分页信息）。
+class ColibriProfilePostsPage {
+  final List<ColibriPost> posts;
+  final List<ColibriPost> pinned;
+  final int? nextCursor;
+  final bool hasMore;
+
+  const ColibriProfilePostsPage({
+    this.posts = const [],
+    this.pinned = const [],
+    this.nextCursor,
+    this.hasMore = false,
+  });
+
+  factory ColibriProfilePostsPage.fromJson(Map<String, dynamic> json) {
+    List<ColibriPost> parsePosts(dynamic value) => value is List
+        ? value
+            .whereType<Map<String, dynamic>>()
+            .map(ColibriPost.fromJson)
+            .toList()
+        : <ColibriPost>[];
+
+    final meta = json['meta'] is Map<String, dynamic>
+        ? json['meta'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final rawCursor = meta['next_cursor'];
+    final nextCursor = rawCursor == null ? null : int.tryParse('$rawCursor');
+
+    return ColibriProfilePostsPage(
+      posts: parsePosts(json['data']),
+      pinned: parsePosts(json['pinned']),
+      nextCursor: nextCursor,
+      hasMore: meta['has_more'] == true,
+    );
+  }
+}
+
 /// 帖子媒体（TimelineResource.relations.media[]）。
 class ColibriPostMedia {
   final int id;
@@ -239,6 +276,8 @@ class ColibriPost {
   final bool isSensitive;
   final bool isAiGenerated;
   final bool isPinned; // 全局置顶帖（后台置顶，Feed 顶部展示，带置顶标识）
+  final bool isProfilePinned; // 个人主页置顶帖
+  final bool canPinToProfile; // 当前用户是否可操作个人主页置顶
   final bool isAd; // 信息流原生广告影子帖
   final bool canDelete;
   final bool canReport;
@@ -270,6 +309,8 @@ class ColibriPost {
     required this.isSensitive,
     required this.isAiGenerated,
     this.isPinned = false,
+    this.isProfilePinned = false,
+    this.canPinToProfile = false,
     this.isAd = false,
     required this.canDelete,
     required this.canReport,
@@ -369,6 +410,8 @@ class ColibriPost {
       isSensitive: meta['is_sensitive'] == true,
       isAiGenerated: meta['is_ai_generated'] == true,
       isPinned: isPinned,
+      isProfilePinned: meta['profile_pinned'] == true,
+      canPinToProfile: permissions['can_pin'] == true,
       isAd: json['is_ad'] == true,
       canDelete: permissions['can_delete'] == true,
       canReport: permissions['can_report'] == true,
@@ -391,6 +434,8 @@ class ColibriPost {
     int? commentsCount,
     String? commentsCountFormatted,
     bool? isPinned,
+    bool? isProfilePinned,
+    bool? canPinToProfile,
     bool? isAd,
   }) {
     return ColibriPost(
@@ -418,6 +463,8 @@ class ColibriPost {
       isSensitive: isSensitive,
       isAiGenerated: isAiGenerated,
       isPinned: isPinned ?? this.isPinned,
+      isProfilePinned: isProfilePinned ?? this.isProfilePinned,
+      canPinToProfile: canPinToProfile ?? this.canPinToProfile,
       isAd: isAd ?? this.isAd,
       canDelete: canDelete,
       canReport: canReport,

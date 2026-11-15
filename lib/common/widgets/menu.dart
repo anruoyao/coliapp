@@ -102,97 +102,36 @@ class _MenuSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cLightIcon.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            for (var index = 0; index < entries.length; index++)
-              InkWell(
+    return ColibriSheetSurface(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ColibriSheetHeader(),
+          const SizedBox(height: 8),
+          for (var index = 0; index < entries.length; index++)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
                 onTap: () => Navigator.of(context).pop(index),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: entries[index].label,
-                  ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 52,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: entries[index].label,
+                      ),
+                    ),
+                    if (index < entries.length - 1)
+                      const Divider(
+                          height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+                  ],
                 ),
               ),
-            const SizedBox(height: 8),
-          ],
-        ),
+            ),
+        ],
       ),
-    );
-  }
-}
-
-/// A single action shown inside a [LiquidGlassMenu].
-class LiquidGlassMenuItem {
-  final String label;
-  final VoidCallback onTap;
-
-  const LiquidGlassMenuItem({required this.label, required this.onTap});
-}
-
-/// A post/action menu displayed by the shared spring bottom-sheet route.
-class LiquidGlassMenu extends StatelessWidget {
-  final Widget trigger;
-  final List<LiquidGlassMenuItem> items;
-  final Color? triggerColor;
-
-  const LiquidGlassMenu({
-    super.key,
-    required this.trigger,
-    required this.items,
-    this.triggerColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final selected = await showColibriBottomSheet<int>(
-          _MenuSheet(
-            entries: items
-                .map((item) => _MenuEntry(
-                      label: Text(
-                        item.label,
-                        style: MyTextStyle.gilroyMedium(
-                            size: 15, color: cDarkText),
-                      ),
-                      onTap: item.onTap,
-                    ))
-                .toList(),
-          ),
-          context: context,
-          backgroundColor: Colors.transparent,
-          useSafeArea: true,
-          isScrollControlled: true,
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
-          ),
-        );
-        if (selected != null && selected < items.length) {
-          items[selected].onTap();
-        }
-      },
-      child: trigger,
     );
   }
 }

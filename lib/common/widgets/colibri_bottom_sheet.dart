@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:get/get.dart';
+import 'package:untitled/utilities/const.dart';
 
-/// A bottom sheet route with a linear entrance, drag resistance, and
+/// A bottom sheet route with an eased entrance, drag resistance, and
 /// one-third dismissal threshold.
 Future<T?> showColibriBottomSheet<T>(
   Widget bottomSheet, {
@@ -88,6 +89,200 @@ Future<T?> showColibriBottomSheetBuilder<T>({
   );
 }
 
+class ColibriSheetSurface extends StatelessWidget {
+  const ColibriSheetSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 20),
+    this.backgroundColor = cWhite,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: backgroundColor,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: Padding(padding: padding, child: child),
+      ),
+    );
+  }
+}
+
+class ColibriSheetHeader extends StatelessWidget {
+  const ColibriSheetHeader({
+    super.key,
+    this.title,
+    this.trailing,
+    this.foregroundColor = const Color(0xFF1C1C1E),
+    this.handleColor = const Color(0xFFD1D1D6),
+  });
+
+  final String? title;
+  final Widget? trailing;
+  final Color foregroundColor;
+  final Color handleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 5,
+            decoration: BoxDecoration(
+              color: handleColor,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ),
+        if (title != null || trailing != null) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 36,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (title != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 48),
+                    child: Text(
+                      title!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: foregroundColor,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (trailing != null)
+                  Align(alignment: Alignment.centerRight, child: trailing!),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class ColibriSheetCloseButton extends StatelessWidget {
+  const ColibriSheetCloseButton({super.key, this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: MaterialLocalizations.of(context).closeButtonTooltip,
+      child: IconButton(
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+        icon: const Icon(Icons.close_rounded, size: 19),
+        style: IconButton.styleFrom(
+          backgroundColor: const Color(0xFFF2F2F7),
+          foregroundColor: const Color(0xFF3A3A3C),
+          minimumSize: const Size(34, 34),
+          maximumSize: const Size(34, 34),
+          padding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class ColibriSheetActionRow extends StatelessWidget {
+  const ColibriSheetActionRow({
+    super.key,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.icon,
+    this.destructive = false,
+    this.showDivider = false,
+  });
+
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final VoidCallback onTap;
+  final bool destructive;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        destructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: subtitle == null ? 52 : 64,
+              ),
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 21, color: color),
+                    const SizedBox(width: 14),
+                  ],
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (!destructive)
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 20, color: Color(0xFFC7C7CC)),
+                ],
+              ),
+            ),
+            if (showDivider)
+              const Divider(
+                  height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Future<T?> _pushColibriBottomSheet<T>(
   WidgetBuilder builder, {
   BuildContext? context,
@@ -155,9 +350,9 @@ class ColibriBottomSheetRoute<T> extends PopupRoute<T> {
     Duration? enterBottomSheetDuration,
     Duration? exitBottomSheetDuration,
   })  : enterBottomSheetDuration =
-            enterBottomSheetDuration ?? const Duration(milliseconds: 220),
+            enterBottomSheetDuration ?? const Duration(milliseconds: 300),
         exitBottomSheetDuration =
-            exitBottomSheetDuration ?? const Duration(milliseconds: 180);
+            exitBottomSheetDuration ?? const Duration(milliseconds: 240);
 
   final WidgetBuilder builder;
   final ThemeData theme;
@@ -193,7 +388,7 @@ class ColibriBottomSheetRoute<T> extends PopupRoute<T> {
 
   @override
   Color get barrierColor =>
-      modalBarrierColor ?? Colors.black.withValues(alpha: 0.24);
+      modalBarrierColor ?? Colors.black.withValues(alpha: 0.32);
 
   @override
   AnimationController createAnimationController() {
@@ -319,7 +514,8 @@ class _ColibriBottomSheetBodyState<T> extends State<_ColibriBottomSheetBody<T>>
     _lastDragDelta = delta;
     setState(() {
       if (_dragOffset <= 0 && delta < 0) {
-        _dragOffset = (_dragOffset + delta * 0.22).clamp(-72.0, 0.0);
+        final resistance = 72 / (72 + _dragOffset.abs());
+        _dragOffset = (_dragOffset + delta * resistance).clamp(-72.0, 0.0);
       } else {
         _dragOffset = (_dragOffset + delta).clamp(0.0, 1000.0);
       }
@@ -354,7 +550,7 @@ class _ColibriBottomSheetBodyState<T> extends State<_ColibriBottomSheetBody<T>>
     final sheet = AnimatedBuilder(
       animation: Listenable.merge([widget.animation, _returnController]),
       builder: (context, child) {
-        final entrance = Curves.linear.transform(widget.animation.value);
+        final entrance = Curves.easeOutCubic.transform(widget.animation.value);
         final dragOffset = _returnController.isAnimating
             ? _returnController.value
             : _dragOffset;
@@ -371,8 +567,11 @@ class _ColibriBottomSheetBodyState<T> extends State<_ColibriBottomSheetBody<T>>
         child: Material(
           color: widget.backgroundColor,
           elevation: widget.elevation ?? 0,
-          shape: widget.shape,
-          clipBehavior: widget.clipBehavior ?? Clip.none,
+          shape: widget.shape ??
+              const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+          clipBehavior: widget.clipBehavior ?? Clip.antiAlias,
           child: widget.useSafeArea
               ? SafeArea(
                   top: true,

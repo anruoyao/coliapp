@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:untitled/common/extensions/font_extension.dart';
 import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/widgets/guest_auth_sheet.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 受限 Tab 的访客锁定态（通知 / 聊天）。
@@ -18,13 +20,13 @@ class GuestLockedView extends StatelessWidget {
     final (icon, title, subtitle) = switch (kind) {
       GuestLockedKind.notifications => (
           Icons.notifications_none_rounded,
-          '通知登录后可用',
-          '登录后可查看点赞、评论、关注与系统通知',
+          LKeys.guestNotificationsLocked.tr,
+          LKeys.guestNotificationsLockedDesc.tr,
         ),
       GuestLockedKind.chats => (
           Icons.chat_bubble_outline_rounded,
-          '聊天登录后可用',
-          '登录后可与好友、群聊收发消息',
+          LKeys.guestChatLocked.tr,
+          LKeys.guestChatLockedDesc.tr,
         ),
     };
 
@@ -34,7 +36,10 @@ class GuestLockedView extends StatelessWidget {
         backgroundColor: cWhite,
         surfaceTintColor: cWhite,
         elevation: 0,
-        title: Text(kind == GuestLockedKind.notifications ? '通知' : '聊天',
+        title: Text(
+            kind == GuestLockedKind.notifications
+                ? LKeys.commonNotifications.tr
+                : LKeys.commonChats.tr,
             style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 17, color: cMainText)),
       ),
@@ -90,7 +95,7 @@ class GuestLockedView extends StatelessWidget {
                     children: [
                       const Icon(Icons.login_rounded, color: cWhite, size: 18),
                       const SizedBox(width: 8),
-                      Text('登 录',
+                      Text(LKeys.guestSignInButton.tr,
                           style:
                               MyTextStyle.gilroyBold(size: 15, color: cWhite)),
                     ],

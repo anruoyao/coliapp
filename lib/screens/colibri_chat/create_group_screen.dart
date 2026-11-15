@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_messenger_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_chat/chat_detail_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -32,8 +33,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     try {
       final chatId = await ColibriMessengerService.shared.createGroupDraft();
       if (chatId.isEmpty) {
-        showColibriToast('创建失败',
-            message: '未能创建群聊草稿',
+        showColibriToast(LKeys.chatCreateFailed.tr,
+            message: LKeys.chatGroupDraftCreateFailed.tr,
             backgroundColor: cRed,
             colorText: Colors.white);
         return;
@@ -50,7 +51,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             isGroup: true,
           ));
     } catch (e) {
-      showColibriToast('创建失败',
+      showColibriToast(LKeys.chatCreateFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -66,8 +67,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('创建群聊',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.chatCreateGroup.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: SingleChildScrollView(
@@ -75,8 +77,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('群名称',
-                style: TextStyle(
+            Text(LKeys.chatGroupName.tr,
+                style: const TextStyle(
                     fontSize: 15,
                     color: cMainText,
                     fontWeight: FontWeight.w600)),
@@ -84,11 +86,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             TextField(
               controller: _name,
               maxLength: 100,
-              decoration: _fieldDecoration('给群聊起个名字'),
+              decoration: _fieldDecoration(LKeys.chatGroupNameHint.tr),
             ),
             const SizedBox(height: 16),
-            const Text('群描述',
-                style: TextStyle(
+            Text(LKeys.chatGroupDescription.tr,
+                style: const TextStyle(
                     fontSize: 15,
                     color: cMainText,
                     fontWeight: FontWeight.w600)),
@@ -97,7 +99,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               controller: _desc,
               maxLines: 3,
               maxLength: 240,
-              decoration: _fieldDecoration('介绍一下这个群'),
+              decoration: _fieldDecoration(LKeys.chatGroupDescriptionHint.tr),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -115,8 +117,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
-                    : const Text('创建',
-                        style: TextStyle(
+                    : Text(LKeys.chatCreate.tr,
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),

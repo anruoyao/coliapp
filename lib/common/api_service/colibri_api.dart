@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:untitled/common/managers/bookmark_store.dart';
 import 'package:untitled/common/managers/chat_unread_store.dart';
 import 'package:untitled/common/managers/session_manager.dart';
+import 'package:untitled/localization/allLanguages.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 import 'package:uuid/uuid.dart';
 
@@ -77,6 +79,8 @@ class ColibriApi {
     final h = <String, String>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      // 设备界面语言：服务端据此本地化游客接口报错与注册验证码邮件
+      'Accept-Language': SessionManager.shared.getLang().language.languageCode,
       // 版本上报：危险版本下线（服务端按最低安全版本拦截）
       'X-App-Version': appVersion,
       'X-App-Platform': Platform.isIOS ? 'ios' : 'android',
@@ -152,7 +156,8 @@ class ColibriApi {
       }
 
       // 失败：优先取 colibri 响应里的 message / errors
-      String message = '请求失败（HTTP ${response.statusCode}）';
+      String message =
+          LKeys.apiRequestFailedHttp.trParams({'p1': '${response.statusCode}'});
       Map<String, dynamic>? errors;
       Map<String, dynamic>? errorData;
       bool hasServerMessage = false;
@@ -170,7 +175,7 @@ class ColibriApi {
       // 429：限流。服务端已统一返回中文文案（「操作过于频繁，请稍后再试」或带
       // 等待秒数的「操作过于频繁，请 N 秒后再试」），直接透传；仅无 message 时本地兜底
       if (response.statusCode == 429 && !hasServerMessage) {
-        message = '操作过于频繁，请稍后再试';
+        message = LKeys.apiTooManyRequests.tr;
       }
 
       // 401：token 失效，清理本地会话并触发全局登出回调
@@ -214,7 +219,7 @@ class ColibriApi {
     } on ColibriApiException {
       rethrow;
     } on Exception catch (e) {
-      throw ColibriApiException('网络异常：$e');
+      throw ColibriApiException(LKeys.apiNetworkError.trParams({'p1': '$e'}));
     }
   }
 
@@ -325,7 +330,7 @@ class ColibriApi {
     } on ColibriApiException {
       rethrow;
     } on Exception catch (e) {
-      throw ColibriApiException('网络异常：$e');
+      throw ColibriApiException(LKeys.apiNetworkError.trParams({'p1': '$e'}));
     }
   }
 
@@ -338,14 +343,15 @@ class ColibriApi {
           ? decoded
           : <String, dynamic>{'data': decoded};
     }
-    String message = '请求失败（HTTP ${streamed.statusCode}）';
+    String message = LKeys.apiStreamRequestFailedHttp
+        .trParams({'p1': '${streamed.statusCode}'});
     if (decoded is Map<String, dynamic> && decoded['message'] != null) {
       message = decoded['message'].toString();
     }
     // 429：同上，透传服务端中文文案（含带秒数版本），仅无 message 时本地兜底
     if (streamed.statusCode == 429 &&
         !(decoded is Map<String, dynamic> && decoded['message'] != null)) {
-      message = '操作过于频繁，请稍后再试';
+      message = LKeys.apiTooManyRequests.tr;
     }
 
     // 封禁/维护响应头兜底（multipart 上传同理）
@@ -404,12 +410,13 @@ class ColibriApi {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final token = response.body.trim();
         if (token.isEmpty) {
-          throw ColibriApiException('登录失败：未返回 token');
+          throw ColibriApiException(LKeys.apiLoginFailedNoToken.tr);
         }
         return token;
       }
 
-      String message = '登录失败（HTTP ${response.statusCode}）';
+      String message =
+          LKeys.apiLoginFailedHttp.trParams({'p1': '${response.statusCode}'});
       final decoded = _decodeBody(response.body);
       if (decoded is Map<String, dynamic>) {
         if (decoded['message'] != null) message = decoded['message'].toString();
@@ -435,7 +442,7 @@ class ColibriApi {
     } on ColibriApiException {
       rethrow;
     } on Exception catch (e) {
-      throw ColibriApiException('网络异常：$e');
+      throw ColibriApiException(LKeys.apiNetworkError.trParams({'p1': '$e'}));
     }
   }
 
@@ -466,12 +473,12 @@ class ColibriApi {
     });
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('注册失败：响应缺少 data');
+      throw ColibriApiException(LKeys.apiSignUpFailedMissingData.tr);
     }
     final token = data['token']?.toString();
     final user = data['user'];
     if (token == null || token.isEmpty || user is! Map<String, dynamic>) {
-      throw ColibriApiException('注册失败：响应缺少 token 或 user');
+      throw ColibriApiException(LKeys.apiSignUpFailedMissingTokenUser.tr);
     }
     return (token: token, user: user);
   }
@@ -482,7 +489,7 @@ class ColibriApi {
     final resp = await get('auth/config', auth: false);
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('获取注册配置失败：响应缺少 data');
+      throw ColibriApiException(LKeys.apiSignUpConfigFailedMissingData.tr);
     }
     return ColibriAuthConfig.fromJson(data);
   }
@@ -503,7 +510,7 @@ class ColibriApi {
     );
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('发送验证码失败：响应缺少 data');
+      throw ColibriApiException(LKeys.apiSendCodeFailedMissingData.tr);
     }
     return (
       codeExpiresIn: (data['code_expires_seconds'] as num?)?.toInt() ?? 600,

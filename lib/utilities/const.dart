@@ -19,8 +19,11 @@ const String colibriApiBase = "https://mariawk.cn/api/";
 const String colibriAppApiKey = "clbPK-8f3k2m9xq4w7v1t6a5s0d2n8h4j6y1c";
 
 // ColibriPlus 实时通道（Laravel Reverb / pusher 协议）
+// App Key 必须与服务端 .env 的 REVERB_APP_KEY 一致（网页端构建时从同一变量注入）。
+// 旧值 nhxjwwd3w1stvi8xv11d 已失效，Reverb 会直接返回 4001 Application does not exist
+// 并断开连接，导致 App 永远拿不到 connection_established、不会订阅任何私有频道。
 const String colibriWsUrl =
-    "wss://mariawk.cn/app/nhxjwwd3w1stvi8xv11d?protocol=7&client=flutter&version=1.0";
+    "wss://mariawk.cn/app/4onf0ies55iiec0ol7qb?protocol=7&client=flutter&version=1.0";
 
 const String revenuecatAppleApiKey = '';
 const String revenuecatAndroidApiKey = '';
@@ -50,7 +53,7 @@ extension O on String {
 }
 
 // Colors
-// Neutral glass palette: white surfaces, charcoal content, and restrained status colors.
+// Neutral palette: white surfaces, charcoal content, and restrained status colors.
 const cPrimary = Color(0xFF1D1D1F);
 const cPulsing = Color(0xFFB8BCC4);
 const cHashtagColor = Color(0xFF1D1D1F);
@@ -69,7 +72,7 @@ const cDarkGreen = Color(0xFF34363B);
 const cBlueTick = Color(0xFF1D9BF0);
 const cRed = Color(0xFFFF3939);
 
-// Neutral glass tokens used for selected states and soft surfaces.
+// Neutral tokens used for selected states and soft surfaces.
 const cPrimarySoft = Color(0xFFE9EBEF);
 const cGradientGreen1 = Color(0xFFF8F9FB);
 const cGradientGreen2 = Color(0xFFB9BEC7);
@@ -85,6 +88,6 @@ const refreshIndicatorBgColor = cPrimary;
 // Corner Radius-Smoothing
 const cornerSmoothing = 1.0;
 
-// Floating Liquid Glass tab bar reserved space (bar height + bottom gap),
-// excluding the device safe-area inset. Used to lift FABs above the glass bar.
-const double kLiquidNavBarReservedHeight = 80.0;
+// Legacy bottom navigation reserved space (bar height + bottom gap).
+// Excludes the device safe-area inset.
+const double kBottomNavReservedHeight = 80.0;

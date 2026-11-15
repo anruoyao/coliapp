@@ -102,6 +102,9 @@ List<Lang> LANGUAGES = [
       language: Language.Vietnamese),
 ];
 
+/// 已完整接入界面文案的语言；设备语言不在其中时回退到英文。
+const Set<String> supportedLanguageCodes = {'zh-Hans', 'en', 'ja'};
+
 extension LanguageExtension on Language {
   Locale get local {
     return Locale(languageCode);

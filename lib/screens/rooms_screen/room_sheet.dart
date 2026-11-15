@@ -1,230 +1,213 @@
-import 'package:figma_squircle_updated/figma_squircle.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/extensions/date_time_extension.dart';
-import 'package:untitled/common/extensions/font_extension.dart';
 import 'package:untitled/common/extensions/int_extension.dart';
+import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
 import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/room_model.dart';
-import 'package:untitled/screens/extra_views/back_button.dart';
-import 'package:untitled/screens/extra_views/buttons.dart';
 import 'package:untitled/screens/profile_screen/profile_screen.dart';
 import 'package:untitled/screens/rooms_screen/room_card.dart';
 import 'package:untitled/screens/rooms_screen/room_controller.dart';
-import 'package:untitled/utilities/const.dart';
 
 class RoomSheet extends StatelessWidget {
-  const RoomSheet(
-      {Key? key,
-      this.isFromInfo = false,
-      required this.room,
-      required this.controller})
-      : super(key: key);
+  const RoomSheet({
+    super.key,
+    this.isFromInfo = false,
+    required this.room,
+    required this.controller,
+  });
+
   final bool isFromInfo;
   final Room room;
   final RoomController controller;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      children: [
-        GetBuilder(
-            init: controller,
-            builder: (controller) {
-              return Container(
-                decoration: const ShapeDecoration(
-                  shape: SmoothRectangleBorder(
-                      borderRadius: SmoothBorderRadius.only(
-                          topLeft: SmoothRadius(
-                              cornerRadius: 30,
-                              cornerSmoothing: cornerSmoothing),
-                          topRight: SmoothRadius(
-                              cornerRadius: 30,
-                              cornerSmoothing: cornerSmoothing))),
-                  color: cBlackSheetBG,
+    return ColibriSheetSurface(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+      child: GetBuilder<RoomController>(
+        init: controller,
+        builder: (controller) => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ColibriSheetHeader(
+                title: room.title ?? '',
+                trailing: const ColibriSheetCloseButton(),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  ClipOval(
+                    child: MyCachedImage(
+                      imageUrl: room.photo,
+                      width: 56,
+                      height: 56,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          room.title ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF1C1C1E),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '${(room.totalMember ?? 0).makeToString()} ${LKeys.members.tr}',
+                          style: const TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (room.getInterests().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  children: room
+                      .getInterests()
+                      .map((interest) => RoomCardInterestTagToShow(
+                            tag: interest.title ?? '',
+                          ))
+                      .toList(),
                 ),
-                padding: const EdgeInsets.all(25),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          ClipOval(
-                            child: MyCachedImage(
-                                imageUrl: room.photo, width: 60, height: 60),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  room.title ?? '',
-                                  style: MyTextStyle.gilroyBold(
-                                      size: 19, color: cWhite),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Row(
-                                  children: [
-                                    Text(
-                                      (room.totalMember ?? 0).makeToString(),
-                                      style: MyTextStyle.gilroyBold(
-                                          size: 16, color: cPrimary),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      LKeys.members.tr,
-                                      style: MyTextStyle.gilroyLight(
-                                          size: 16, color: cPrimary),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const XMarkButton()
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        children: room.getInterests().map((e) {
-                          return RoomCardInterestTagToShow(
-                            tag: e.title ?? '',
-                            color: cGreen,
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        room.desc ?? '',
-                        style: MyTextStyle.outfitLight(color: cLightIcon),
-                      ),
-                      const SizedBox(height: 30),
-                      isFromInfo || room.isPrivate == 0
-                          ? SizedBox(
-                              height: isFromInfo ? 200 : null,
-                              child: isFromInfo
-                                  ? infoView()
-                                  : room.isJoinRequestEnable == 1
-                                      ? Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              LKeys.requestToJoinThisRoom.tr,
-                                              style: MyTextStyle.gilroyBold(
-                                                  size: 20, color: cLightIcon),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              LKeys.requestToJoinDesc.tr,
-                                              style: MyTextStyle.gilroyLight(
-                                                  color: cLightIcon, size: 16),
-                                            ),
-                                            const SizedBox(height: 20),
-                                          ],
-                                        )
-                                      : Container(),
-                            )
-                          : Container(),
-                      isFromInfo
-                          ? Container()
-                          : CommonSheetButton(
-                              color: controller.room.getUserAccessType() ==
-                                      GroupUserAccessType.requested
-                                  ? cLightText.withValues(alpha: 0.7)
-                                  : cWhite,
-                              title: room.getUserAccessType() ==
-                                      GroupUserAccessType.invited
-                                  ? LKeys.acceptInvitation
-                                  : room.isJoinRequestEnable == 1
-                                      ? controller.room.getUserAccessType() ==
-                                              GroupUserAccessType.requested
-                                          ? LKeys.requested
-                                          : LKeys.requestToJoin
-                                      : LKeys.joinThisRoom,
-                              onTap: controller.joinOrRequestOrAccept,
-                            )
-                    ],
+              ],
+              if ((room.desc ?? '').isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  room.desc ?? '',
+                  style: const TextStyle(
+                    color: Color(0xFF3A3A3C),
+                    fontSize: 15,
+                    height: 1.4,
                   ),
                 ),
-              );
-            }),
-      ],
+              ],
+              if (isFromInfo) ...[
+                const SizedBox(height: 20),
+                _infoView(context),
+              ] else if (room.isPrivate == 0 &&
+                  room.isJoinRequestEnable == 1) ...[
+                const SizedBox(height: 16),
+                Text(
+                  LKeys.requestToJoinThisRoom.tr,
+                  style: const TextStyle(
+                    color: Color(0xFF1C1C1E),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  LKeys.requestToJoinDesc.tr,
+                  style: const TextStyle(
+                    color: Color(0xFF636366),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              if (!isFromInfo) ...[
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: controller.joinOrRequestOrAccept,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1C1C1E),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(_actionTitle(controller)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget infoView() {
-    return SizedBox(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+  String _actionTitle(RoomController controller) {
+    if (room.getUserAccessType() == GroupUserAccessType.invited) {
+      return LKeys.acceptInvitation.tr;
+    }
+    if (room.isJoinRequestEnable == 1) {
+      return controller.room.getUserAccessType() ==
+              GroupUserAccessType.requested
+          ? LKeys.requested.tr
+          : LKeys.requestToJoin.tr;
+    }
+    return LKeys.joinThisRoom.tr;
+  }
+
+  Widget _infoView(BuildContext context) {
+    final members = room.roomUsers ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (members.isNotEmpty)
           SizedBox(
-            height: 70,
+            height: 56,
             child: Stack(
-              children: List.generate(room.roomUsers?.length ?? 0, (index) {
+              children: List.generate(members.length, (index) {
                 return Positioned(
-                  left: index * 40,
+                  left: index * 36,
                   child: Container(
                     decoration: BoxDecoration(
-                        border: Border.all(
-                            color: cWhite.withValues(alpha: 0.8), width: 2),
-                        shape: BoxShape.circle),
-                    // padding: const EdgeInsets.all(1.5),
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                      border: Border.all(color: Colors.white, width: 2),
+                      shape: BoxShape.circle,
+                    ),
                     child: MyCachedImage(
-                      imageUrl: room.roomUsers?[index].profile,
-                      width: 50,
-                      height: 50,
-                      cornerRadius: 50,
+                      imageUrl: members[index].profile,
+                      width: 48,
+                      height: 48,
+                      cornerRadius: 48,
                     ),
                   ),
                 );
               }),
             ),
           ),
-          const SizedBox(height: 40), // const SizedBox(height: 40),
-          Row(
-            children: [
-              Text(
-                LKeys.createdOn.tr,
-                style: MyTextStyle.gilroyLight(color: cWhite),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                DateTime.parse(room.createdAt ?? '').formatFullDate(),
-                style: MyTextStyle.gilroySemiBold(color: cPrimary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () {
-              Get.back();
-              Get.to(() => ProfileScreen(userId: room.admin?.id ?? 0),
-                  opaque: false);
-            },
-            child: Row(
-              children: [
-                Text(
-                  LKeys.createdBy.tr,
-                  style: MyTextStyle.gilroyLight(color: cWhite),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  '@${room.admin?.username ?? 'unknown'}',
-                  style: MyTextStyle.gilroySemiBold(color: cPrimary),
-                ),
-              ],
+        const SizedBox(height: 12),
+        Text(
+          '${LKeys.createdOn.tr} ${DateTime.parse(room.createdAt ?? '').formatFullDate()}',
+          style: const TextStyle(color: Color(0xFF636366), fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () {
+            Get.back();
+            Get.to(() => ProfileScreen(userId: room.admin?.id ?? 0),
+                opaque: false);
+          },
+          child: Text(
+            '${LKeys.createdBy.tr} @${room.admin?.username ?? 'unknown'}',
+            style: const TextStyle(
+              color: Color(0xFF007AFF),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 40),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

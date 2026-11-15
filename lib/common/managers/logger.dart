@@ -1,19 +1,21 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
+
 class Loggers {
   static void info(Object? msg) {
-    developer.log('$msg', name: 'INFO');
+    if (kDebugMode) developer.log('$msg', name: 'INFO');
   }
 
   static void success(Object? msg) {
-    developer.log('✅✅✅: $msg', name: 'SUCCESS');
+    if (kDebugMode) developer.log('✅✅✅: $msg', name: 'SUCCESS');
   }
 
   static void warning(Object? msg) {
-    developer.log('⚠️⚠️⚠️: $msg', name: 'WARNING');
+    if (kDebugMode) developer.log('⚠️⚠️⚠️: $msg', name: 'WARNING');
   }
 
   static void error(Object? msg) {
-    developer.log('🔴🔴🔴: $msg', name: 'ERROR');
+    if (kDebugMode) developer.log('🔴🔴🔴: $msg', name: 'ERROR');
   }
 }

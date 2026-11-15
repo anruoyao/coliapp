@@ -21,6 +21,7 @@ import 'package:untitled/common/managers/logger.dart';
 import 'package:untitled/common/managers/presence_manager.dart';
 import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/managers/session_manager.dart';
+import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/functions.dart';
 import 'package:untitled/localization/allLanguages.dart';
@@ -57,6 +58,7 @@ Future<void> main() async {
   await GetStorage.init();
   Loggers.info('startup.storage.init.done ${startup.elapsedMilliseconds}ms');
   SessionManager.shared;
+  SessionManager.shared.resolveStartupLanguage();
   Loggers.info('startup.session.ready ${startup.elapsedMilliseconds}ms');
   // 全局收藏状态唯一真相（permanent：登录/登出/401 全生命周期常驻，内部按 token 自管理）
   Get.put(BookmarkStore(), permanent: true);
@@ -100,8 +102,20 @@ Future<void> main() async {
   Loggers.info('startup.runApp.returned ${startup.elapsedMilliseconds}ms');
   WidgetsBinding.instance.addPostFrameCallback((_) {
     Loggers.info('startup.first-frame ${startup.elapsedMilliseconds}ms');
+    _showStartupLanguageSwitchToast();
     unawaited(_initializeOptionalServices());
   });
+}
+
+/// 首次进入或设备语言变化导致自动切换时，在首帧后提示一次。
+void _showStartupLanguageSwitchToast() {
+  final lang = SessionManager.shared.takeStartupAutoSwitch();
+  if (lang == null) return;
+  showColibriToast(LKeys.commonLanguageAutoSwitched.tr,
+      message: LKeys.commonLanguageAutoSwitchedDesc
+          .trParams({'p1': lang.displayName}),
+      status: ColibriToastStatus.info,
+      duration: const Duration(milliseconds: 3500));
 }
 
 Future<void> _initializeOptionalServices() async {

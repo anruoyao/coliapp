@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_settings_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_settings_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -44,10 +45,10 @@ class _ColibriCredentialsScreenState extends State<ColibriCredentialsScreen> {
         sec['login_notification'] = v;
         setState(() => _data!['security_settings'] = sec);
       }
-      showColibriToast('已保存',
+      showColibriToast(LKeys.settingsSaved.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     } catch (e) {
-      showColibriToast('保存失败',
+      showColibriToast(LKeys.settingsSaveFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -63,8 +64,9 @@ class _ColibriCredentialsScreenState extends State<ColibriCredentialsScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('账号凭证',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.settingsCredentials.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: _loading
@@ -72,17 +74,19 @@ class _ColibriCredentialsScreenState extends State<ColibriCredentialsScreen> {
           : ListView(
               children: [
                 const SizedBox(height: 8),
-                _infoRow(Icons.email_outlined, '邮箱',
+                _infoRow(Icons.email_outlined, LKeys.commonEmail.tr,
                     _data?['email']?.toString() ?? ''),
                 const Divider(height: 1, color: cLightBg),
-                _infoRow(Icons.phone_android_rounded, '手机号',
-                    _data?['phone']?.toString() ?? '未绑定'),
+                _infoRow(
+                    Icons.phone_android_rounded,
+                    LKeys.settingsPhoneNumber.tr,
+                    _data?['phone']?.toString() ?? LKeys.settingsNotLinked.tr),
                 const Divider(height: 1, color: cLightBg),
                 if (_data?['security_settings'] is Map) ...[
                   ColibriSettingToggleRow(
                     icon: Icons.notifications_active_outlined,
-                    title: '登录通知',
-                    subtitle: '有新的登录活动时提醒我',
+                    title: LKeys.settingsLoginNotifications.tr,
+                    subtitle: LKeys.settingsLoginNotificationDescription.tr,
                     value: ((_data!['security_settings']
                             as Map)['login_notification']) ==
                         true,
@@ -90,10 +94,10 @@ class _ColibriCredentialsScreenState extends State<ColibriCredentialsScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('管理你的登录凭证与安全通知。邮箱用于登录与找回密码。',
-                      style: TextStyle(fontSize: 12, color: cLightText)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(LKeys.settingsCredentialsDescription.tr,
+                      style: const TextStyle(fontSize: 12, color: cLightText)),
                 ),
               ],
             ),

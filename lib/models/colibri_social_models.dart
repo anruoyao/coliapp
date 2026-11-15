@@ -284,6 +284,11 @@ class ColibriSocialLink {
 /// 用户列表项（PeopleResource / 关注粉丝 / 搜索结果）。
 class ColibriPeople {
   final int id;
+
+  /// 关注记录游标（后端 PeopleResource 的 cursor_id）。
+  /// 关注/粉丝列表分页必须用它：后端按「关注记录 id」倒序翻页，
+  /// 而 id 是用户 id，拿 id 当游标会永远返回同一页。
+  final int? cursorId;
   final String name;
   final String username;
   final String? avatarUrl;
@@ -296,6 +301,7 @@ class ColibriPeople {
 
   ColibriPeople({
     required this.id,
+    this.cursorId,
     required this.name,
     required this.username,
     this.avatarUrl,
@@ -323,6 +329,9 @@ class ColibriPeople {
 
     return ColibriPeople(
       id: json['id'] is int ? json['id'] : int.tryParse('${json['id']}') ?? 0,
+      cursorId: json['cursor_id'] is int
+          ? json['cursor_id'] as int
+          : int.tryParse('${json['cursor_id'] ?? ''}'),
       name: json['name']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
       avatarUrl: json['avatar_url']?.toString(),

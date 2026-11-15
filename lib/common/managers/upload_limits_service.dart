@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
+import 'package:untitled/localization/languages.dart';
 
 /// 媒体上传大小限制（上传前本地预检测）。
 ///
@@ -22,13 +24,13 @@ class UploadLimitsService {
   };
 
   /// 内置降级文案（与后端 lang/zh/api/upload.php 一致）。
-  static const Map<String, String> _fallbackMessages = {
-    'image': '图片文件大小不能超过 128 MB',
-    'video': '视频文件大小不能超过 512 MB',
-    'audio': '音频文件大小不能超过 24 MB',
-    'gif': 'GIF 文件大小不能超过 2 MB',
-    'document': '文档文件大小不能超过 24 MB',
-  };
+  static Map<String, String> get _fallbackMessages => {
+        'image': LKeys.apiImageSizeLimit.tr,
+        'video': LKeys.apiVideoSizeLimit.tr,
+        'audio': LKeys.apiAudioSizeLimit.tr,
+        'gif': LKeys.apiGifSizeLimit.tr,
+        'document': LKeys.apiDocumentSizeLimit.tr,
+      };
 
   Map<String, dynamic>? _limits;
   DateTime? _fetchedAt;

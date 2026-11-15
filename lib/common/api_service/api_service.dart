@@ -57,10 +57,6 @@ class ApiService {
       }
     });
 
-    Loggers.info("URL: $url");
-    Loggers.info(
-        "Parameters: ${params.isEmpty ? "Empty" : JsonEncoder.withIndent('  ').convert(params)}");
-
     try {
       // 必须有超时：响应在传输中丢失时（弱网/跨境链路），无超时的 Future 会永远挂起，
       // 导致 UI 一直转圈。超时后抛 TimeoutException，由调用方处理。
@@ -74,7 +70,7 @@ class ApiService {
 
       if (cancelToken?.isCancelled ?? false) {
         if (kDebugMode) {
-          Loggers.warning("Request cancelled: $url");
+          Loggers.warning('API request cancelled');
         }
         throw Exception('Request was cancelled');
       }
@@ -82,51 +78,26 @@ class ApiService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decodedResponse =
             jsonDecode(response.body) as Map<String, dynamic>;
-        final prettyString =
-            const JsonEncoder.withIndent('  ').convert(decodedResponse);
-        Loggers.info(prettyString);
         completion(decodedResponse);
       } else if (response.statusCode == 404) {
-        Loggers.error('Please check baseURL in const.dart file');
-        throw Exception("URL Error: ${response.statusCode} - $url");
+        Loggers.error('API request failed with HTTP 404');
+        throw Exception('API request failed with HTTP 404');
       } else {
-        final errorBody = response.body;
-        final errorMessage = _extractErrorMessage(errorBody);
-        Loggers.error(errorMessage);
-        // Handle HTTP errors
-        throw Exception(
-            "HTTP Error: ${response.statusCode} - ${response.reasonPhrase}");
+        Loggers.error('API request failed with HTTP ${response.statusCode}');
+        throw Exception('API request failed with HTTP ${response.statusCode}');
       }
     } on HttpException {
       throw Exception('Could not connect to the server');
-    } on FormatException catch (e) {
+    } on FormatException {
       // Handle JSON decoding errors
-      Loggers.error("Invalid JSON format: ${e.message}");
-      throw Exception("Invalid JSON format: ${e.message}");
-    } on Exception catch (e) {
-      Loggers.error("Unexpected error: $e");
+      Loggers.error('API returned invalid JSON');
+      throw Exception('API returned invalid JSON');
+    } on Exception {
+      Loggers.error('API request failed');
       rethrow;
     } finally {
       _cleanupClient(cancelToken, client);
     }
-  }
-
-  String _extractErrorMessage(String responseBody) {
-    final regex = RegExp(
-      r'<!--\s*(.*?)\s*#0 ', // Matches everything between <!-- and #0
-      dotAll: true,
-    );
-    final match = regex.firstMatch(responseBody);
-    return match?.group(1)?.trim() ??
-        "Unknown error occurred: ${_shorten(responseBody)}";
-  }
-
-  /// Shortens the response body if no specific error is found
-  String _shorten(String responseBody) {
-    const maxLength = 100;
-    return responseBody.length > maxLength
-        ? "${responseBody.substring(0, maxLength)}..."
-        : responseBody;
   }
 
   Future multiPartCallApi({
@@ -175,7 +146,6 @@ class ApiService {
       for (var xFile in files) {
         if (xFile != null && xFile.path.isNotEmpty) {
           final file = File(xFile.path);
-          Loggers.success('UDPALOED: $keyName, ${file.path}');
           final multipartFile = http.MultipartFile(
             keyName,
             file.readAsBytes().asStream(),
@@ -187,17 +157,13 @@ class ApiService {
       }
     });
 
-    Loggers.info("URL: $url");
-    Loggers.info(
-        "Parameters: ${params.isEmpty ? "Empty" : JsonEncoder.withIndent('  ').convert(params)}");
-
     try {
       // 上传大文件耗时较长，超时放宽到 5 分钟，但同样不能没有超时
       final responseStream =
           await client.send(request).timeout(const Duration(seconds: 300));
 
       if (cancelToken?.isCancelled ?? false) {
-        Loggers.warning("Request cancelled: $url");
+        Loggers.warning('API upload cancelled');
         throw Exception('Request was cancelled');
       }
 
@@ -207,28 +173,24 @@ class ApiService {
 
       if (responseStream.statusCode >= 200 && responseStream.statusCode < 300) {
         final decodedResponse = jsonDecode(responseStr) as Map<String, dynamic>;
-        final prettyString =
-            const JsonEncoder.withIndent('  ').convert(decodedResponse);
-        Loggers.info(prettyString);
-
         // Use the provided `fromJson` function to parse the response
         completion(decodedResponse);
       } else if (responseStream.statusCode == 404) {
-        Loggers.error('Please check baseURL in const.dart file');
-        throw Exception("URL Error: ${responseStream.statusCode} - $url");
+        Loggers.error('API request failed with HTTP 404');
+        throw Exception('API request failed with HTTP 404');
       } else {
-        final errorMessage = _extractErrorMessage(responseStr);
-        Loggers.error(errorMessage);
+        Loggers.error(
+            'API request failed with HTTP ${responseStream.statusCode}');
         throw Exception(
-            "HTTP Error: ${responseStream.statusCode} - ${responseStream.reasonPhrase}");
+            'API request failed with HTTP ${responseStream.statusCode}');
       }
     } on HttpException {
       throw Exception('Could not connect to the server');
-    } on FormatException catch (e) {
-      Loggers.error("Invalid JSON format: ${e.message}");
-      throw Exception("Invalid JSON format: ${e.message}");
-    } on Exception catch (e) {
-      Loggers.error("Unexpected error: $e");
+    } on FormatException {
+      Loggers.error('API returned invalid JSON');
+      throw Exception('API returned invalid JSON');
+    } on Exception {
+      Loggers.error('API request failed');
       rethrow;
     } finally {
       _cleanupClient(cancelToken, client);
@@ -254,7 +216,7 @@ class ApiService {
         String filePath = '${directory!.path}/$fileName';
         File file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
-        Loggers.success("File downloaded to: $filePath");
+        Loggers.success('File downloaded');
         return filePath;
       } else {
         Loggers.error("Failed to download file.");

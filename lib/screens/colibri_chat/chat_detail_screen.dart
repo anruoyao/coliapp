@@ -12,6 +12,7 @@ import 'package:untitled/common/managers/reverb_service.dart';
 import 'package:untitled/common/managers/upload_limits_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_chat_models.dart';
 import 'package:untitled/screens/colibri_chat/chats_screen.dart';
 import 'package:untitled/screens/colibri_chat/group_members_screen.dart';
@@ -288,7 +289,7 @@ class ColibriChatDetailController extends GetxController {
       _assignSorted(list);
     } catch (e) {
       // 展示服务端错误（如对方关闭私信/仅粉丝可私信）
-      showColibriToast('发送失败',
+      showColibriToast(LKeys.chatSendFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -308,7 +309,7 @@ class ColibriChatDetailController extends GetxController {
     final msg = await UploadLimitsService.shared
         .check(File(file.path).lengthSync(), 'image');
     if (msg != null) {
-      showColibriToast('图片过大',
+      showColibriToast(LKeys.commonImageTooLarge.tr,
           message: msg, backgroundColor: cRed, colorText: Colors.white);
       return;
     }
@@ -325,7 +326,7 @@ class ColibriChatDetailController extends GetxController {
       final list = await ColibriMessengerService.shared.fetchMessages(chatId);
       _assignSorted(list);
     } catch (e) {
-      showColibriToast('发送失败',
+      showColibriToast(LKeys.chatSendFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -479,8 +480,8 @@ class ChatDetailScreen extends StatelessWidget {
                         controller.loadFailed.value
                             ? ColibriEmptyState(
                                 icon: Icons.cloud_off_rounded,
-                                title: '消息加载失败',
-                                subtitle: '下拉重新加载，或点击重试',
+                                title: LKeys.chatMessagesLoadFailed.tr,
+                                subtitle: LKeys.chatPullToReloadOrTapRetry.tr,
                                 topSpacing: 60,
                                 action: GestureDetector(
                                   behavior: HitTestBehavior.opaque,
@@ -493,18 +494,18 @@ class ChatDetailScreen extends StatelessWidget {
                                       color: cPrimary,
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: const Text('重试',
-                                        style: TextStyle(
+                                    child: Text(LKeys.commonRetry.tr,
+                                        style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w700,
                                             color: cWhite)),
                                   ),
                                 ),
                               )
-                            : const ColibriEmptyState(
+                            : ColibriEmptyState(
                                 icon: Icons.waving_hand_rounded,
-                                title: '开始聊天吧',
-                                subtitle: '打个招呼，发送第一条消息',
+                                title: LKeys.chatStartConversation.tr,
+                                subtitle: LKeys.chatStartConversationDesc.tr,
                                 topSpacing: 60,
                               ),
                       ],
@@ -554,12 +555,16 @@ class ChatDetailScreen extends StatelessWidget {
       ColibriChatDetailController controller, ColibriMessage msg) {
     showColibriSheet(
       context,
-      title: '消息操作',
+      title: LKeys.chatMessageActions.tr,
       items: [
         ColibriSheetItem(
           icon: Icons.delete_outline_rounded,
-          label: msg.isMine ? '删除消息' : '从我的视角删除',
-          subtitle: msg.isMine ? '所有人将不再看到这条消息' : '仅从你的设备移除',
+          label: msg.isMine
+              ? LKeys.chatDeleteMessage.tr
+              : LKeys.chatDeleteForMe.tr,
+          subtitle: msg.isMine
+              ? LKeys.chatDeleteForEveryoneDesc.tr
+              : LKeys.chatDeleteForMeDesc.tr,
           danger: true,
           onTap: () => controller.deleteMessage(msg),
         ),
@@ -708,13 +713,13 @@ class _BlockedBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: const BoxDecoration(
             color: cWhite, border: Border(top: BorderSide(color: cLightBg))),
-        child: const Column(
+        child: Column(
           children: [
-            Icon(Icons.block_rounded, color: cLightIcon, size: 20),
-            SizedBox(height: 6),
-            Text('屏蔽状态',
+            const Icon(Icons.block_rounded, color: cLightIcon, size: 20),
+            const SizedBox(height: 6),
+            Text(LKeys.chatBlockedStatus.tr,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: cLightText)),
+                style: const TextStyle(fontSize: 13, color: cLightText)),
           ],
         ),
       ),
@@ -774,7 +779,7 @@ class _MessageInputBarState extends State<_MessageInputBar> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
                 decoration: InputDecoration(
-                  hintText: '输入消息...',
+                  hintText: LKeys.chatMessageHint.tr,
                   hintStyle: const TextStyle(color: cLightText, fontSize: 14.5),
                   isDense: true,
                   contentPadding:
@@ -906,7 +911,7 @@ class _AudioBubbleState extends State<_AudioBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('语音',
+                  Text(LKeys.chatVoiceMessage.tr,
                       style: TextStyle(
                           fontSize: 14,
                           color: widget.mine ? cWhite : cMainText)),

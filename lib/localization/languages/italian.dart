@@ -50,6 +50,13 @@ const italianStrings = {
   LKeys.randoms: 'Casuali',
   LKeys.chats: 'Chat',
   LKeys.profile: 'Profilo',
+  LKeys.profilePinned: 'Fissato sul profilo',
+  LKeys.pinToProfile: 'Fissa sul profilo',
+  LKeys.unpinFromProfile: 'Rimuovi dal profilo',
+  LKeys.profilePostPinned: 'Post fissato sul profilo',
+  LKeys.profilePostUnpinned: 'Post rimosso dal profilo',
+  LKeys.profilePostPinFailed:
+      'Impossibile aggiornare il post fissato sul profilo',
   LKeys.retry: 'Riprova',
   LKeys.profileLoadFailed: 'Impossibile caricare il profilo. Riprova',
   LKeys.missingUserInfo: 'Informazioni utente mancanti',
@@ -289,6 +296,7 @@ const italianStrings = {
   LKeys.method2: '6 mesi',
   LKeys.method1: '3 mesi',
   LKeys.pleaseConfigureSubscription: '2 mesi',
+  LKeys.audioProcessing: 'Audio in elaborazione',
   LKeys.audio:
       'Procedi con la sottoscrizione del piano e in pochi minuti sarai verificato con semplici passaggi. I nostri piani sono impostati per il rinnovo automatico, quindi non devi preoccuparti della scadenza del tuo abbonamento',
   LKeys.spaces: 'Consentiamo solo video più brevi di',

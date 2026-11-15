@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:untitled/common/managers/logger.dart';
 import 'package:untitled/localization/allLanguages.dart';
 import 'package:untitled/models/registration.dart';
 import 'package:untitled/models/setting_model.dart';
@@ -23,21 +24,63 @@ class SessionManager {
     storage.write("lang", lang.language.languageCode);
   }
 
+  Lang? _startupAutoSwitchedLang;
+
+  Lang? _langForCode(String? code) {
+    if (code == null || code.isEmpty) return null;
+    for (final lang in LANGUAGES) {
+      if (lang.language.languageCode == code) return lang;
+    }
+    return null;
+  }
+
+  /// 启动时解析界面语言：首次进入、存储语言不受支持或设备语言变化时，
+  /// 自动切换并记录一次待提示语言（由首帧后 toast 消费）。
+  Lang resolveStartupLanguage() {
+    final deviceLang = _detectDeviceLanguage();
+    final storedCode = storage.read("lang");
+    final stored = _langForCode(storedCode is String ? storedCode : null);
+    final storedSupported = stored != null &&
+        supportedLanguageCodes.contains(stored.language.languageCode);
+    final lastDevice = storage.read(SessionKeys.lastDeviceLang);
+    final deviceChanged = lastDevice is String &&
+        lastDevice.isNotEmpty &&
+        lastDevice != deviceLang.language.languageCode;
+    final autoSwitch = !storedSupported || deviceChanged;
+    final resolved = autoSwitch ? deviceLang : (stored ?? deviceLang);
+    if (autoSwitch) {
+      _startupAutoSwitchedLang = deviceLang;
+      setLang(deviceLang);
+    }
+    storage.write(SessionKeys.lastDeviceLang, deviceLang.language.languageCode);
+    Loggers.info('startup.language.resolve stored=${storedCode ?? '-'} '
+        'device=${deviceLang.language.languageCode} '
+        'lastDevice=${lastDevice ?? '-'} autoSwitched=$autoSwitch');
+    return resolved;
+  }
+
+  /// 取出启动时自动切换的语言，只消费一次。
+  Lang? takeStartupAutoSwitch() {
+    final lang = _startupAutoSwitchedLang;
+    _startupAutoSwitchedLang = null;
+    return lang;
+  }
+
   Lang getLang() {
     final stored = storage.read("lang");
     if (stored is String && stored.isNotEmpty) {
-      try {
-        return LANGUAGES
-            .firstWhere((element) => element.language.languageCode == stored);
-      } catch (_) {
-        // 存储的值无效，回退到设备语言检测
-      }
+      final lang = _langForCode(stored);
+      if (lang != null) return lang;
     }
     return _detectDeviceLanguage();
   }
 
-  /// 根据设备 locale 自动匹配支持的语言，未匹配时回退到英文。
+  /// 根据设备 locale 自动匹配已完整支持的语言，未匹配时回退到英文。
   Lang _detectDeviceLanguage() {
+    final supported = LANGUAGES
+        .where((lang) =>
+            supportedLanguageCodes.contains(lang.language.languageCode))
+        .toList();
     final deviceLocale = PlatformDispatcher.instance.locale;
     final deviceLang = deviceLocale.languageCode; // 例如 "zh"、"en"
     final deviceScript = deviceLocale.scriptCode; // 例如 "Hans"、"Hant"
@@ -45,33 +88,21 @@ class SessionManager {
     // 1) 优先精确匹配 languageCode + scriptCode（处理中文简繁体等情况）
     if (deviceScript != null) {
       final composed = '$deviceLang-$deviceScript';
-      try {
-        return LANGUAGES
-            .firstWhere((element) => element.language.languageCode == composed);
-      } catch (_) {
-        // 无精确匹配，继续后续策略
-      }
+      final exact = supported
+          .firstWhereOrNull((lang) => lang.language.languageCode == composed);
+      if (exact != null) return exact;
     }
 
     // 2) 匹配 languageCode（例如 "zh-Hans" 中的基础 "zh"）
-    try {
-      return LANGUAGES.firstWhere((element) {
-        final code = element.language.languageCode;
-        final base = code.split(RegExp(r'[-_]')).first;
-        return base == deviceLang;
-      });
-    } catch (_) {
-      // 3) 对于中文繁体设备，回退到简体中文
-      if (deviceLang == 'zh') {
-        try {
-          return LANGUAGES.firstWhere(
-              (element) => element.language.languageCode == 'zh-Hans');
-        } catch (_) {}
-      }
-    }
+    final base = supported.firstWhereOrNull((lang) {
+      final code = lang.language.languageCode;
+      return code.split(RegExp(r'[-_]')).first == deviceLang;
+    });
+    if (base != null) return base;
 
-    // 4) 最终回退到英文
-    return LANGUAGES.first;
+    // 3) 未匹配到支持语言时回退到英文
+    return supported.firstWhere((lang) => lang.language.languageCode == 'en',
+        orElse: () => LANGUAGES.first);
   }
 
   String getStoredConversation() {
@@ -233,4 +264,5 @@ class SessionKeys {
   static const isLogin = "isLogin";
   static const colibriToken = "colibri_token";
   static const colibriUser = "colibri_user";
+  static const lastDeviceLang = "lastDeviceLang";
 }

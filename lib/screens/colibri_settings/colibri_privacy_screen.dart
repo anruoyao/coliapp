@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_settings_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_settings_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -17,39 +18,69 @@ class _ColibriPrivacyScreenState extends State<ColibriPrivacyScreen> {
   final _fields = [
     (
       'mentions',
-      '谁能 @ 提及我',
+      LKeys.settingsPrivacyMentions.tr,
       const ['all', 'followers', 'nobody', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '我批准的人'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyApproved.tr
+      }
     ),
     (
       'followers',
-      '谁能关注我',
+      LKeys.settingsPrivacyWhoCanFollowMe.tr,
       const ['all', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '需我批准'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyRequiresApproval.tr
+      }
     ),
     (
       'direct_messages',
-      '谁能私信我',
+      LKeys.settingsPrivacyWhoCanMessageMe.tr,
       const ['all', 'followers', 'nobody', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '我批准的人'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyApproved.tr
+      }
     ),
     (
       'story_replies',
-      '谁能回复我的故事',
+      LKeys.settingsPrivacyWhoCanReplyToStories.tr,
       const ['all', 'followers', 'nobody', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '我批准的人'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyApproved.tr
+      }
     ),
     (
       'group_invites',
-      '谁能邀请我加群',
+      LKeys.settingsPrivacyWhoCanInviteToGroups.tr,
       const ['all', 'followers', 'nobody', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '我批准的人'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyApproved.tr
+      }
     ),
     (
       'payment_transfers',
-      '谁能给我转账',
+      LKeys.settingsPrivacyWhoCanSendMoney.tr,
       const ['all', 'followers', 'nobody', 'approved'],
-      {'all': '所有人', 'followers': '仅粉丝', 'nobody': '没有人', 'approved': '我批准的人'}
+      {
+        'all': LKeys.settingsPrivacyEveryone.tr,
+        'followers': LKeys.settingsPrivacyFollowers.tr,
+        'nobody': LKeys.settingsPrivacyNobody.tr,
+        'approved': LKeys.settingsPrivacyApproved.tr
+      }
     ),
   ];
 
@@ -76,10 +107,10 @@ class _ColibriPrivacyScreenState extends State<ColibriPrivacyScreen> {
     setState(() => _saving = true);
     try {
       await ColibriSettingsService.shared.updatePrivacySettings(_settings!);
-      showColibriToast('已保存',
+      showColibriToast(LKeys.settingsSaved.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     } catch (e) {
-      showColibriToast('保存失败',
+      showColibriToast(LKeys.settingsSaveFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -95,8 +126,9 @@ class _ColibriPrivacyScreenState extends State<ColibriPrivacyScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('账号隐私',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.settingsAccountPrivacy.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: _loading

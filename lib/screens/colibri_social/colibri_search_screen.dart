@@ -5,6 +5,7 @@ import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/managers/haptic_manager.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_card.dart';
@@ -85,8 +86,8 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
       // 关注/取消关注成功：与主页关注按钮一致的轻振动
       HapticManager.shared.light();
       if (result.requested) {
-        showColibriToast('已发送关注请求',
-            message: '等待对方批准',
+        showColibriToast(LKeys.socialFollowRequestSent.tr,
+            message: LKeys.socialPendingApproval.tr,
             backgroundColor: cPrimary,
             colorText: Colors.white);
       }
@@ -96,6 +97,7 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
         if (idx != -1) {
           _people[idx] = ColibriPeople(
             id: p.id,
+            cursorId: p.cursorId,
             name: p.name,
             username: p.username,
             avatarUrl: p.avatarUrl,
@@ -125,7 +127,7 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
       body: Column(
         children: [
           ColibriCapsuleTabs(
-            labels: const ['用户', '帖子'],
+            labels: [LKeys.profileUser.tr, LKeys.feedPost.tr],
             selectedIndex: _tab,
             onChanged: (i) {
               setState(() => _tab = i);
@@ -137,18 +139,18 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: cPrimary))
                 : !_searched
-                    ? const ColibriEmptyState(
+                    ? ColibriEmptyState(
                         icon: Icons.search_rounded,
-                        title: '输入关键词搜索',
-                        subtitle: '查找用户或感兴趣的帖子',
+                        title: LKeys.profileSearchHint.tr,
+                        subtitle: LKeys.profileSearchPrompt.tr,
                         topSpacing: 60,
                       )
                     : _tab == 0
                         ? (_people.isEmpty
-                            ? const ColibriEmptyState(
+                            ? ColibriEmptyState(
                                 icon: Icons.person_search_rounded,
-                                title: '没有找到用户',
-                                subtitle: '换个关键词试试',
+                                title: LKeys.profileNoUsersFound.tr,
+                                subtitle: LKeys.profileTryAnotherKeyword.tr,
                                 topSpacing: 60,
                               )
                             : ListView.builder(
@@ -168,10 +170,10 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
                                 },
                               ))
                         : (_posts.isEmpty
-                            ? const ColibriEmptyState(
+                            ? ColibriEmptyState(
                                 icon: Icons.travel_explore_rounded,
-                                title: '没有找到帖子',
-                                subtitle: '换个关键词试试',
+                                title: LKeys.profileNoPostsFound.tr,
+                                subtitle: LKeys.profileTryAnotherKeyword.tr,
                                 topSpacing: 60,
                               )
                             : ListView.builder(
@@ -201,7 +203,7 @@ class _ColibriSearchScreenState extends State<ColibriSearchScreen> {
       onSubmitted: (_) => _search(),
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
-        hintText: '搜索用户或帖子',
+        hintText: LKeys.profileSearchUsersOrPosts.tr,
         hintStyle: const TextStyle(color: cLightText, fontSize: 15),
         isDense: true,
         prefixIcon:
@@ -290,7 +292,9 @@ class _UserTile extends StatelessWidget {
             if (!person.isOwner) ...[
               const SizedBox(width: 10),
               ColibriPillButton(
-                text: person.isFollowing ? '已关注' : '关注',
+                text: person.isFollowing
+                    ? LKeys.socialFollowing.tr
+                    : LKeys.feedFollow.tr,
                 filled: !person.isFollowing,
                 height: 34,
                 radius: 12,

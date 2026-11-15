@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 
 typedef TranslationResult = ({
@@ -32,7 +34,7 @@ class ColibriTimelineService {
         sourceLanguage: data['source_language']?.toString() ?? '',
       );
     }
-    throw ColibriApiException('翻译失败');
+    throw ColibriApiException(LKeys.apiTranslationFailed.tr);
   }
 
   /// 点赞默认表情（unified_id 为十六进制码点，对应 assets/emoji/img-apple-64/{id}.png）。
@@ -160,7 +162,7 @@ class ColibriTimelineService {
     });
     final data = resp['data'];
     if (data is! Map<String, dynamic>) {
-      throw ColibriApiException('帖子不存在');
+      throw ColibriApiException(LKeys.apiPostNotFound.tr);
     }
     final post = ColibriPost.fromJson(data['post'] as Map<String, dynamic>);
     final commentsJson = data['comments'];
@@ -226,7 +228,7 @@ class ColibriTimelineService {
         sourceLanguage: data['source_language']?.toString() ?? '',
       );
     }
-    throw ColibriApiException('翻译失败');
+    throw ColibriApiException(LKeys.apiTranslationFailed.tr);
   }
 
   /// 点赞/取消点赞（reaction 是 toggle）。
@@ -284,10 +286,12 @@ class ColibriTimelineService {
     final resp =
         await _api.get('feedback/report/reasons', query: {'type': type});
     final data = resp['data'];
-    if (data is! Map<String, dynamic>) throw ColibriApiException('无法获取举报理由');
+    if (data is! Map<String, dynamic>) {
+      throw ColibriApiException(LKeys.apiReportReasonsUnavailable.tr);
+    }
     final reasons = data['reasons'];
     return (
-      title: data['title']?.toString() ?? '举报',
+      title: data['title']?.toString() ?? LKeys.apiReport.tr,
       description: data['description']?.toString() ?? '',
       reasons: reasons is List
           ? reasons.whereType<Map<String, dynamic>>().toList()
@@ -334,7 +338,7 @@ class ColibriTimelineService {
         commentsCount: _parseCommentsCount(data),
       );
     }
-    throw ColibriApiException('评论失败');
+    throw ColibriApiException(LKeys.apiCommentFailed.tr);
   }
 
   /// 删除评论。返回服务端最新评论总数（主评论删除时其全部回复已由数据库级联删除）。
@@ -464,7 +468,7 @@ class ColibriTimelineService {
     });
     final data = resp['data'];
     if (data is Map<String, dynamic>) return ColibriPoll.fromJson(data);
-    throw ColibriApiException('投票失败');
+    throw ColibriApiException(LKeys.apiVoteFailed.tr);
   }
 
   /// 发布帖子（草稿转正式帖）。
@@ -473,7 +477,7 @@ class ColibriTimelineService {
   /// - [pollOptions] 非空时按「投票帖」发布（先 post/editor/poll/create，再带 poll_options create）。
   /// - 纯文本或媒体已预上传的帖子直接 post/editor/create。
   /// - [isSensitive]/[isAiGenerated] 对应网页端 marks 标记（敏感内容 / AI 生成）。
-  Future<void> createPost({
+  Future<ColibriPost> createPost({
     required String content,
     List<String>? pollOptions,
     bool isSensitive = false,
@@ -491,6 +495,9 @@ class ColibriTimelineService {
       body['poll_options'] =
           pollOptions.map((o) => {'choice_text': o}).toList();
     }
-    await _api.post('post/editor/create', body: body);
+    final resp = await _api.post('post/editor/create', body: body);
+    final data = resp['data'];
+    if (data is Map<String, dynamic>) return ColibriPost.fromJson(data);
+    throw ColibriApiException(LKeys.apiPostPublishedContentUnreadable.tr);
   }
 }

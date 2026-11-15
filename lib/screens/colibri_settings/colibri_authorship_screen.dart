@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_settings_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_settings_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -27,11 +28,11 @@ class _ColibriAuthorshipScreenState extends State<ColibriAuthorshipScreen> {
   String _label(String status) {
     switch (status) {
       case 'authorized':
-        return '你已成为作者';
+        return LKeys.settingsYouAreNowAnAuthor.tr;
       case 'pending':
-        return '申请审核中';
+        return LKeys.settingsApplicationUnderReview.tr;
       default:
-        return '尚未申请';
+        return LKeys.settingsNotAppliedYet.tr;
     }
   }
 
@@ -44,13 +45,13 @@ class _ColibriAuthorshipScreenState extends State<ColibriAuthorshipScreen> {
         _statusFuture = Future.value('pending');
         _requesting = false;
       });
-      showColibriToast('已提交',
-          message: '你的作者申请已提交，等待审核',
+      showColibriToast(LKeys.settingsSubmitted.tr,
+          message: LKeys.settingsAuthorApplicationSubmitted.tr,
           backgroundColor: cGreen,
           colorText: Colors.white);
     } catch (e) {
       setState(() => _requesting = false);
-      showColibriToast('提交失败',
+      showColibriToast(LKeys.settingsSubmissionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -64,8 +65,9 @@ class _ColibriAuthorshipScreenState extends State<ColibriAuthorshipScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('作者身份',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.settingsAuthorship.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: FutureBuilder<String>(
@@ -92,15 +94,17 @@ class _ColibriAuthorshipScreenState extends State<ColibriAuthorshipScreen> {
                         color: cMainText)),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '成为作者后可发布帖子、上传故事等内容，与粉丝互动。',
+              Text(
+                LKeys.settingsAuthorshipDescription.tr,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: cLightText),
+                style: const TextStyle(fontSize: 13, color: cLightText),
               ),
               const SizedBox(height: 24),
               if (!isAuthor)
                 ColibriSettingsSaveButton(
-                  text: isPending ? '申请审核中...' : '申请成为作者',
+                  text: isPending
+                      ? LKeys.settingsApplicationUnderReviewButton.tr
+                      : LKeys.settingsApplyToBecomeAuthor.tr,
                   loading: _requesting || isPending,
                   onTap: isPending ? () {} : _request,
                 ),

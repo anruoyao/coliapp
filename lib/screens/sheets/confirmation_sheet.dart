@@ -1,10 +1,7 @@
-import 'package:figma_squircle_updated/figma_squircle.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:untitled/common/extensions/font_extension.dart';
+import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/localization/languages.dart';
-import 'package:untitled/screens/extra_views/back_button.dart';
-import 'package:untitled/screens/extra_views/buttons.dart';
 import 'package:untitled/utilities/const.dart';
 
 class ConfirmationSheet extends StatelessWidget {
@@ -12,61 +9,64 @@ class ConfirmationSheet extends StatelessWidget {
   final String buttonTitle;
   final Function() onTap;
 
-  const ConfirmationSheet(
-      {Key? key,
-      required this.desc,
-      required this.buttonTitle,
-      required this.onTap})
-      : super(key: key);
+  const ConfirmationSheet({
+    super.key,
+    required this.desc,
+    required this.buttonTitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      children: [
-        Container(
-          decoration: const ShapeDecoration(
-            shape: SmoothRectangleBorder(
-                borderRadius: SmoothBorderRadius.only(
-                    topLeft: SmoothRadius(
-                        cornerRadius: 30, cornerSmoothing: cornerSmoothing),
-                    topRight: SmoothRadius(
-                        cornerRadius: 30, cornerSmoothing: cornerSmoothing))),
-            color: cBlackSheetBG,
+    return ColibriSheetSurface(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ColibriSheetHeader(
+            title: LKeys.areYouSure.tr,
+            trailing: const ColibriSheetCloseButton(),
           ),
-          padding: const EdgeInsets.all(25),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Spacer(),
-                    XMarkButton(),
-                  ],
-                ),
-                Text(
-                  LKeys.areYouSure.tr,
-                  style: MyTextStyle.gilroyBold(size: 22, color: cWhite),
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  desc.tr,
-                  style: MyTextStyle.gilroyLight(color: cLightIcon),
-                ),
-                const SizedBox(height: 40),
-                CommonSheetButton(
-                  title: buttonTitle,
-                  onTap: () {
-                    Get.back();
-                    onTap();
-                  },
-                )
-              ],
+          const SizedBox(height: 16),
+          Text(
+            desc.tr,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF636366),
+              fontSize: 15,
+              height: 1.4,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 22),
+          SizedBox(
+            height: 50,
+            child: FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onTap();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: cPrimary,
+                foregroundColor: cWhite,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(buttonTitle.tr),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF007AFF),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+        ],
+      ),
     );
   }
 }

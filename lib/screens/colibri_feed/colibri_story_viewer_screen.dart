@@ -10,6 +10,7 @@ import 'package:untitled/common/api_service/colibri_story_service.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_story_models.dart';
 import 'package:untitled/screens/colibri_chat/chat_detail_screen.dart';
 import 'package:untitled/utilities/const.dart';
@@ -98,16 +99,18 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     final confirmed = await showColibriConfirmDialog(
       context,
       icon: Icons.auto_delete_outlined,
-      title: '删除这条故事？',
-      message: '故事发布 24 小时后自动消失，删除后立即不可见且无法恢复',
-      confirmText: '删除',
+      title: LKeys.feedStoryDeleteTitle.tr,
+      message: LKeys.feedStoryDeleteDesc.tr,
+      confirmText: LKeys.feedDelete.tr,
       onConfirm: () async {
         try {
           await ColibriStoryService.shared.deleteStoryFrame(_frame.id);
           return true;
         } catch (_) {
-          showColibriToast('删除失败',
-              message: '请稍后重试', backgroundColor: cRed, colorText: Colors.white);
+          showColibriToast(LKeys.feedDeleteFailed.tr,
+              message: LKeys.feedTryAgainLater.tr,
+              backgroundColor: cRed,
+              colorText: Colors.white);
           return false;
         }
       },
@@ -170,7 +173,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               if (_story.canDelete)
                 _MenuTile(
                   icon: Icons.delete_outline_rounded,
-                  label: '删除故事',
+                  label: LKeys.feedStoryDelete.tr,
                   danger: true,
                   onTap: () {
                     Get.back();
@@ -180,7 +183,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               if (_story.canHide)
                 _MenuTile(
                   icon: Icons.visibility_off_outlined,
-                  label: '隐藏 ${_story.userName} 的故事',
+                  label: LKeys.feedStoryHide
+                      .trParams({'p1': '${_story.userName}'}),
                   onTap: () {
                     Get.back();
                     _comingSoon();
@@ -189,7 +193,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               if (_story.canReport)
                 _MenuTile(
                   icon: Icons.report_gmailerrorred_rounded,
-                  label: '举报故事',
+                  label: LKeys.feedStoryReport.tr,
                   danger: true,
                   onTap: () {
                     Get.back();
@@ -208,7 +212,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
 
   void _comingSoon() {
     if (!mounted) return;
-    showColibriToast('该功能即将推出', context: context);
+    showColibriToast(LKeys.feedComingSoon.tr, context: context);
   }
 
   /// 回复故事：对齐网页 StoryReply，创建/打开与作者的聊天并跳转。
@@ -220,7 +224,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
           await ColibriSocialService.shared.fetchProfile(_story.userName);
       if (!mounted) return;
       if (!author.canStoryReply) {
-        showColibriToast('对方已限制谁能回复其故事',
+        showColibriToast(LKeys.feedStoryReplyRestricted.tr,
             context: context, status: ColibriToastStatus.error);
         return;
       }
@@ -357,7 +361,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                                       border: Border.all(color: Colors.white54),
                                     ),
                                     child: Text(
-                                      '回复 ${_story.userName}',
+                                      LKeys.feedStoryReply.trParams(
+                                          {'p1': '${_story.userName}'}),
                                       style: const TextStyle(
                                           color: Colors.white, fontSize: 13),
                                       overflow: TextOverflow.ellipsis,

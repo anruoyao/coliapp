@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:untitled/common/managers/bookmark_store.dart';
 import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/widgets/colibri_skeleton.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_card.dart';
 import 'package:untitled/screens/colibri_feed/colibri_post_detail_screen.dart';
 import 'package:untitled/utilities/const.dart';
@@ -44,11 +45,11 @@ class _ColibriBookmarksViewState extends State<ColibriBookmarksView> {
           onRefresh: _store.pullRefresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            children: const [
+            children: [
               ColibriEmptyState(
                 icon: Icons.bookmark_border_rounded,
-                title: '还没有收藏的帖子',
-                subtitle: '看到喜欢的帖子，点卡片右下角的书签按钮即可收藏到这里',
+                title: LKeys.profileNoBookmarksYet.tr,
+                subtitle: LKeys.profileBookmarksEmptyDesc.tr,
               ),
             ],
           ),

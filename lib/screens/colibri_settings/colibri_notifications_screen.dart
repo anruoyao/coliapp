@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_settings_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/colibri_settings/colibri_settings_screen.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -27,14 +28,26 @@ class _ColibriSettingsNotificationsScreenState
     'platform_notifications'
   ];
   final _labels = {
-    'direct_messages': ('私信', '收到新私信时通知'),
-    'reactions': ('表情反应', '有人给动态点表情时通知'),
-    'comments': ('评论', '有人评论你的内容时通知'),
-    'shared_posts': ('分享', '你的内容被分享时通知'),
-    'followers': ('新粉丝', '有人关注你时通知'),
-    'follow_request': ('关注请求', '收到关注请求时通知'),
-    'mentions': ('提及', '有人 @ 你时通知'),
-    'platform_notifications': ('平台通知', '接收平台官方活动与营销相关通知'),
+    'direct_messages': (
+      LKeys.settingsDirectMessages.tr,
+      LKeys.settingsNotifyDirectMessages.tr
+    ),
+    'reactions': (LKeys.feedReaction.tr, LKeys.settingsNotifyReactions.tr),
+    'comments': (LKeys.feedComment.tr, LKeys.settingsNotifyComments.tr),
+    'shared_posts': (LKeys.feedShare.tr, LKeys.settingsNotifyShares.tr),
+    'followers': (
+      LKeys.settingsNewFollowers.tr,
+      LKeys.settingsNotifyNewFollowers.tr
+    ),
+    'follow_request': (
+      LKeys.settingsFollowRequests.tr,
+      LKeys.settingsNotifyFollowRequests.tr
+    ),
+    'mentions': (LKeys.settingsMentions.tr, LKeys.settingsNotifyMentions.tr),
+    'platform_notifications': (
+      LKeys.settingsPlatformNotifications.tr,
+      LKeys.settingsPlatformNotificationsDescription.tr
+    ),
   };
 
   Map<String, dynamic>? _push;
@@ -70,12 +83,12 @@ class _ColibriSettingsNotificationsScreenState
     try {
       // 后端每个字段缺省为 false，必须提交完整状态，否则未勾选的项会被重置
       await ColibriSettingsService.shared.updatePushNotificationSettings(cur);
-      showColibriToast('已保存',
+      showColibriToast(LKeys.settingsSaved.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     } catch (e) {
       cur[key] = !v;
       setState(() => _push = cur);
-      showColibriToast('保存失败',
+      showColibriToast(LKeys.settingsSaveFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -89,12 +102,12 @@ class _ColibriSettingsNotificationsScreenState
     try {
       // 后端每个字段缺省为 false，必须提交完整状态，否则未勾选的项会被重置
       await ColibriSettingsService.shared.updateEmailNotificationSettings(cur);
-      showColibriToast('已保存',
+      showColibriToast(LKeys.settingsSaved.tr,
           message: '', backgroundColor: cGreen, colorText: Colors.white);
     } catch (e) {
       cur[key] = !v;
       setState(() => _email = cur);
-      showColibriToast('保存失败',
+      showColibriToast(LKeys.settingsSaveFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -110,14 +123,18 @@ class _ColibriSettingsNotificationsScreenState
         appBar: AppBar(
           backgroundColor: cWhite,
           elevation: 0,
-          title: const Text('通知',
-              style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+          title: Text(LKeys.commonNotifications.tr,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, color: cMainText)),
           leading: BackButton(color: cBlack, onPressed: () => Get.back()),
-          bottom: const TabBar(
+          bottom: TabBar(
             labelColor: cPrimary,
             unselectedLabelColor: cLightText,
             indicatorColor: cPrimary,
-            tabs: [Tab(text: '推送通知'), Tab(text: '邮件通知')],
+            tabs: [
+              Tab(text: LKeys.settingsPushNotifications.tr),
+              Tab(text: LKeys.settingsEmailNotifications.tr)
+            ],
           ),
         ),
         body: _loading

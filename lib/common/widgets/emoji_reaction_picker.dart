@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:untitled/common/widgets/colibri_bottom_sheet.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
-import 'package:untitled/utilities/const.dart';
+import 'package:untitled/localization/languages.dart';
 
 /// 苹果表情位图基础地址（服务器端，网络加载，不占包体积）。
 const String emojiReactionBase =
@@ -186,51 +187,57 @@ Future<void> showReactionPicker(BuildContext context,
   return showColibriBottomSheet<void>(
     ConstrainedBox(
       constraints:
-          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          const Text('添加反应',
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: cMainText)),
-          const SizedBox(height: 4),
-          Flexible(
-            child: GridView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-              ),
-              itemCount: emojiReactions.length,
-              itemBuilder: (ctx, i) {
-                final code = emojiReactions[i];
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    onSelect(code);
-                  },
-                  child: MyCachedImage(
-                    imageUrl: '$emojiReactionBase$code.png',
-                    width: double.infinity,
-                    height: double.infinity,
-                    cornerRadius: 0,
-                  ),
-                );
-              },
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+      child: ColibriSheetSurface(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ColibriSheetHeader(
+              title: LKeys.commonAddReaction.tr,
+              trailing: const ColibriSheetCloseButton(),
             ),
-          ),
-          const SizedBox(height: 16),
-        ],
+            Flexible(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns =
+                      (constraints.maxWidth / 44).floor().clamp(5, 10).toInt();
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.only(top: 12),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                    ),
+                    itemCount: emojiReactions.length,
+                    itemBuilder: (ctx, i) {
+                      final code = emojiReactions[i];
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          onSelect(code);
+                        },
+                        child: MyCachedImage(
+                          imageUrl: '$emojiReactionBase$code.png',
+                          width: double.infinity,
+                          height: double.infinity,
+                          cornerRadius: 0,
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     ),
     context: context,
-    backgroundColor: cWhite,
+    backgroundColor: Colors.transparent,
+    useSafeArea: true,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
   );
 }

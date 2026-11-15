@@ -1,4 +1,6 @@
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/models/colibri_social_models.dart';
 
@@ -14,25 +16,33 @@ class ColibriSocialService {
   Future<ColibriProfile> fetchProfile(String username) async {
     final resp = await _api.get('profile/profile', query: {'id': username});
     final data = resp['data'];
-    if (data is! Map<String, dynamic>) throw ColibriApiException('用户不存在');
+    if (data is! Map<String, dynamic>) {
+      throw ColibriApiException(LKeys.apiUserNotFound.tr);
+    }
     return ColibriProfile.fromJson(data);
   }
 
   /// 用户帖子（filter[type]=posts|media，cursor 分页）。
   /// 注意：colibri 的 profile 路由是双层前缀 `profile/profile/...`。
-  Future<List<ColibriPost>> fetchProfilePosts(int userId,
+  Future<ColibriProfilePostsPage> fetchProfilePosts(int userId,
       {int? cursor, String type = 'posts'}) async {
     final resp = await _api.get('profile/profile/posts', query: {
       'id': '$userId',
       'filter[type]': type,
       if (cursor != null && cursor > 0) 'filter[cursor]': '$cursor',
     });
+    return ColibriProfilePostsPage.fromJson(resp);
+  }
+
+  /// 设置或取消个人主页置顶。服务端负责权限校验与最多三条限制。
+  Future<bool> setProfilePin(int postId, {required bool pinned}) async {
+    final resp = await _api.put('profile/profile/posts/$postId/pin', body: {
+      'pinned': pinned,
+    });
     final data = resp['data'];
-    if (data is! List) return [];
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map((e) => ColibriPost.fromJson(e))
-        .toList();
+    return data is Map<String, dynamic>
+        ? data['profile_pinned'] == true
+        : pinned;
   }
 
   /// 个人主页「信息」详情（加入时间/位置/生日/性别/联系方式/社交链接，按隐私设置过滤）。

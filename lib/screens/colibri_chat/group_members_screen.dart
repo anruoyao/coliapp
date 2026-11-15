@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_messenger_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
 import 'package:untitled/common/managers/session_manager.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_chat_models.dart';
 import 'package:untitled/utilities/const.dart';
 
@@ -43,7 +44,7 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
         _iAmAdmin = list.any((m) => m.userId == _myId && m.isAdmin);
       });
     } catch (e) {
-      showColibriToast('加载失败',
+      showColibriToast(LKeys.commonLoadFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -69,10 +70,10 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
   Future<void> _removeMember(ColibriGroupParticipant m) async {
     final confirm = await showColibriConfirmDialog(
       context,
-      title: '移除成员',
-      message: '确定将 ${m.name} 移出群聊？',
+      title: LKeys.chatRemoveMember.tr,
+      message: LKeys.chatRemoveMemberConfirm.trParams({'p1': m.name}),
       icon: Icons.person_remove_outlined,
-      confirmText: '移除',
+      confirmText: LKeys.chatRemove.tr,
     );
     if (!confirm) return;
     try {
@@ -80,7 +81,7 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
           chatId: widget.chatId, ids: [m.participantId]);
       _load();
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -90,17 +91,17 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
   Future<void> _leaveGroup() async {
     final confirm = await showColibriConfirmDialog(
       context,
-      title: '退出群聊',
-      message: '退出后将无法收到该群消息，确定退出？',
+      title: LKeys.chatLeaveGroup.tr,
+      message: LKeys.chatLeaveGroupConfirm.tr,
       icon: Icons.logout,
-      confirmText: '退出',
+      confirmText: LKeys.chatLeave.tr,
     );
     if (!confirm) return;
     try {
       await ColibriMessengerService.shared.leaveGroup(widget.chatId);
       Get.until((route) => route.isFirst); // 回到主界面（会话列表会刷新）
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -114,8 +115,9 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('群成员',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.chatGroupMembers.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
         actions: [
           IconButton(
@@ -193,7 +195,7 @@ class _GroupMembersScreenState extends State<GroupMembersScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _leaveGroup,
                         icon: const Icon(Icons.logout_rounded),
-                        label: const Text('退出群聊'),
+                        label: Text(LKeys.chatLeaveGroup.tr),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           foregroundColor: cRed,
@@ -252,10 +254,12 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
       await ColibriMessengerService.shared.inviteParticipants(
           chatId: widget.chatId, userIds: _selected.toList());
       Get.back();
-      showColibriToast('已发送',
-          message: '邀请已发送', backgroundColor: cGreen, colorText: Colors.white);
+      showColibriToast(LKeys.chatSent.tr,
+          message: LKeys.chatInvitesSent.tr,
+          backgroundColor: cGreen,
+          colorText: Colors.white);
     } catch (e) {
-      showColibriToast('发送失败',
+      showColibriToast(LKeys.chatSendFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -276,8 +280,8 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
             children: [
               Row(
                 children: [
-                  const Text('邀请成员',
-                      style: TextStyle(
+                  Text(LKeys.chatInviteMembers.tr,
+                      style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                           color: cMainText)),
@@ -291,7 +295,7 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
                 controller: _query,
                 onChanged: (q) => _search(q.trim()),
                 decoration: InputDecoration(
-                  hintText: '搜索用户名',
+                  hintText: LKeys.chatSearchUsername.tr,
                   hintStyle: const TextStyle(color: cLightText, fontSize: 14),
                   prefixIcon:
                       const Icon(Icons.search_rounded, color: cLightText),
@@ -312,11 +316,11 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
                             child: CircularProgressIndicator(color: cPrimary)),
                       )
                     : _candidates.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(20),
+                        ? Padding(
+                            padding: const EdgeInsets.all(20),
                             child: Center(
-                                child: Text('没有可邀请的用户',
-                                    style: TextStyle(color: cLightText))),
+                                child: Text(LKeys.chatNoUsersToInvite.tr,
+                                    style: const TextStyle(color: cLightText))),
                           )
                         : ListView(
                             shrinkWrap: true,
@@ -343,7 +347,8 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
                                 subtitle: Text(
                                   c.canInvite
                                       ? '@${c.username}'
-                                      : '@${c.username}（对方限制了群组邀请）',
+                                      : LKeys.chatInviteRestricted
+                                          .trParams({'p1': c.username}),
                                   style: const TextStyle(
                                       fontSize: 12, color: cLightText),
                                 ),
@@ -362,7 +367,11 @@ class _InviteMembersSheetState extends State<_InviteMembersSheet> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text(_sending ? '发送中...' : '发送邀请（${_selected.length}）',
+                  child: Text(
+                      _sending
+                          ? LKeys.chatSending.tr
+                          : LKeys.chatSendInvites
+                              .trParams({'p1': '${_selected.length}'}),
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),

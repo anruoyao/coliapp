@@ -5,6 +5,7 @@ import 'package:untitled/common/widgets/colibri_ui.dart';
 import 'package:untitled/common/api_service/colibri_timeline_service.dart';
 import 'package:untitled/common/widgets/emoji_reaction_picker.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_post_models.dart';
 import 'package:untitled/screens/colibri_feed/comments/comment_thread_controller.dart';
 import 'package:untitled/utilities/const.dart';
@@ -236,14 +237,14 @@ class _CollapseHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 8, 10, 4),
         child: Row(
           children: [
-            Text('全部 $count 条回复',
+            Text(LKeys.postAllReplies.trParams({'p1': '${count}'}),
                 style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: cGreen)),
             const Spacer(),
-            const Text('收起',
-                style: TextStyle(
+            Text(LKeys.postCollapse.tr,
+                style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: cGreen)),
@@ -270,10 +271,10 @@ class _ExpandedLoadMore extends StatelessWidget {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onLoadMore,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text('回复加载失败，点击重试',
-              style: TextStyle(fontSize: 12.5, color: cRed)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(LKeys.postRepliesLoadFailed.tr,
+              style: const TextStyle(fontSize: 12.5, color: cRed)),
         ),
       );
     }
@@ -300,7 +301,11 @@ class _ExpandedLoadMore extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('查看更多回复${remaining > 0 ? '（$remaining）' : ''}',
+            Text(
+                remaining > 0
+                    ? LKeys.postShowMoreRepliesWithCount
+                        .trParams({'p1': '$remaining'})
+                    : LKeys.postShowMoreReplies.tr,
                 style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
@@ -330,7 +335,9 @@ class _ThreadFooter extends StatelessWidget {
         onTap: onToggleExpand,
         icon: Icons.keyboard_arrow_down_rounded,
         iconAfter: true,
-        label: total > thread.previewReplies.length ? '共 $total 条回复' : '展开回复',
+        label: total > thread.previewReplies.length
+            ? LKeys.postViewAllReplies.trParams({'p1': '${total}'})
+            : LKeys.postExpandReplies.tr,
       ),
     );
   }
@@ -430,7 +437,8 @@ class CommentTile extends StatelessWidget {
           children: [
             if (comment.hasParent && comment.parentUserUsername.isNotEmpty)
               Text(
-                '回复 @${comment.parentUserUsername}：',
+                LKeys.postReplyingToParent
+                    .trParams({'p1': '${comment.parentUserUsername}'}),
                 style: TextStyle(
                     fontSize: contentSize,
                     color: cGreen,
@@ -522,7 +530,7 @@ class _ActionRow extends StatelessWidget {
           onTap: () => actions.onReplyTap(comment),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Text('回复',
+            child: Text(LKeys.postReply.tr,
                 style: TextStyle(
                     fontSize: isReply ? 11.5 : 12,
                     fontWeight: FontWeight.w600,
@@ -615,20 +623,20 @@ class _MoreButton extends StatelessWidget {
   void _showMenu(BuildContext context) {
     showColibriSheet(
       context,
-      title: '评论操作',
+      title: LKeys.postCommentActions.tr,
       items: [
         ColibriSheetItem(
             icon: Icons.reply_rounded,
-            label: '回复',
+            label: LKeys.postReply.tr,
             onTap: () => actions.onReplyTap(comment)),
         ColibriSheetItem(
             icon: Icons.text_fields_rounded,
-            label: '复制文本',
+            label: LKeys.feedCopyText.tr,
             onTap: () => actions.onCopyTap(comment)),
         if (comment.canDelete)
           ColibriSheetItem(
             icon: Icons.delete_outline_rounded,
-            label: '删除',
+            label: LKeys.feedDelete.tr,
             danger: true,
             onTap: () => actions.onDeleteTap(comment),
           ),

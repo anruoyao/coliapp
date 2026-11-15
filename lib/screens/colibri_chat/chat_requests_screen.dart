@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_messenger_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_chat_models.dart';
 import 'package:untitled/screens/colibri_chat/chat_detail_screen.dart';
 import 'package:untitled/utilities/const.dart';
@@ -30,7 +31,7 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
       final list = await ColibriMessengerService.shared.fetchChatRequests();
       setState(() => _requests = list);
     } catch (e) {
-      showColibriToast('加载失败',
+      showColibriToast(LKeys.commonLoadFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -49,7 +50,7 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
               chatId: r.chatId, title: r.groupName, isGroup: true),
           opaque: false);
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -61,7 +62,7 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
       await ColibriMessengerService.shared.declineInvite(r.chatId);
       setState(() => _requests.removeWhere((x) => x.id == r.id));
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -75,8 +76,9 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
       appBar: AppBar(
         backgroundColor: cWhite,
         elevation: 0,
-        title: const Text('请求',
-            style: TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
+        title: Text(LKeys.chatRequests.tr,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold, color: cMainText)),
         leading: BackButton(color: cBlack, onPressed: () => Get.back()),
       ),
       body: _loading
@@ -85,12 +87,12 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
               color: cPrimary,
               onRefresh: _load,
               child: _requests.isEmpty
-                  ? ListView(children: const [
-                      SizedBox(height: 200),
+                  ? ListView(children: [
+                      const SizedBox(height: 200),
                       Center(
-                          child: Text('暂无请求',
-                              style:
-                                  TextStyle(color: cLightText, fontSize: 15))),
+                          child: Text(LKeys.chatNoRequests.tr,
+                              style: const TextStyle(
+                                  color: cLightText, fontSize: 15))),
                     ])
                   : ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -110,7 +112,9 @@ class _ChatRequestsScreenState extends State<ChatRequestsScreen> {
                                     color: cLightIcon)
                                 : null,
                           ),
-                          title: Text('${r.senderName} 邀请你加入群聊',
+                          title: Text(
+                              LKeys.chatGroupInviteReceived
+                                  .trParams({'p1': r.senderName}),
                               style: const TextStyle(
                                   fontSize: 15, color: cMainText)),
                           subtitle: Text('${r.groupName} · ${r.timeAgo}',

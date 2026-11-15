@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_story_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 故事编辑页：沉浸式深色预览 + 文字描述 + 发布（对齐网页端 story_editor 的 content 字段）。
@@ -39,7 +40,7 @@ class _ColibriStoryComposerScreenState
       );
       Get.back(result: true);
     } catch (e) {
-      showColibriToast('发布失败',
+      showColibriToast(LKeys.feedPublishFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -56,8 +57,8 @@ class _ColibriStoryComposerScreenState
       appBar: AppBar(
         backgroundColor: cBlack,
         elevation: 0,
-        title: const Text('新故事',
-            style: TextStyle(
+        title: Text(LKeys.feedNewStory.tr,
+            style: const TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 16, color: cWhite)),
         leading: BackButton(color: cWhite, onPressed: () => Get.back()),
       ),
@@ -101,7 +102,7 @@ class _ColibriStoryComposerScreenState
                         color: cWhite, fontSize: 15, height: 1.4),
                     cursorColor: cPrimary,
                     decoration: InputDecoration(
-                      hintText: '为故事添加文字描述…',
+                      hintText: LKeys.feedStoryCaptionHint.tr,
                       hintStyle: TextStyle(
                           color: cWhite.withValues(alpha: 0.4), fontSize: 14.5),
                       counterStyle: TextStyle(
@@ -157,14 +158,14 @@ class _PublishButton extends StatelessWidget {
                     height: 22,
                     child: CircularProgressIndicator(
                         strokeWidth: 2.4, color: cBlack))
-                : const Row(
+                : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.rocket_launch_rounded,
+                      const Icon(Icons.rocket_launch_rounded,
                           size: 19, color: cBlack),
-                      SizedBox(width: 8),
-                      Text('发布故事',
-                          style: TextStyle(
+                      const SizedBox(width: 8),
+                      Text(LKeys.feedPostStory.tr,
+                          style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
                               color: cBlack)),

@@ -51,6 +51,13 @@ const greekStrings = {
   LKeys.randoms: 'Τυχαία',
   LKeys.chats: 'Συνομιλίες',
   LKeys.profile: 'Προφίλ',
+  LKeys.profilePinned: 'Καρφιτσωμένο στο προφίλ',
+  LKeys.pinToProfile: 'Καρφίτσωμα στο προφίλ',
+  LKeys.unpinFromProfile: 'Ξεκαρφίτσωμα από το προφίλ',
+  LKeys.profilePostPinned: 'Η ανάρτηση καρφιτσώθηκε στο προφίλ',
+  LKeys.profilePostUnpinned: 'Η ανάρτηση ξεκαρφιτσώθηκε από το προφίλ',
+  LKeys.profilePostPinFailed:
+      'Δεν ήταν δυνατή η ενημέρωση της καρφίτσας προφίλ',
   LKeys.retry: 'Δοκιμάστε ξανά',
   LKeys.profileLoadFailed: 'Η φόρτωση του προφίλ απέτυχε. Δοκιμάστε ξανά',
   LKeys.missingUserInfo: 'Λείπουν οι πληροφορίες χρήστη',
@@ -298,6 +305,7 @@ const greekStrings = {
   LKeys.pleaseConfigureSubscription:
       'Βεβαιωθείτε ότι έχετε διαμορφώσει τις αγορές προτού προσπαθήσετε να λάβετε την προεπιλεγμένη παρουσία. Περισσότερες πληροφορίες εδώ',
   LKeys.audio: 'Ήχος',
+  LKeys.audioProcessing: 'Γίνεται επεξεργασία του ήχου',
   LKeys.spaces: 'Χώροι',
   LKeys.room: 'Δωμάτιο',
   LKeys.messages: 'Μηνύματα',

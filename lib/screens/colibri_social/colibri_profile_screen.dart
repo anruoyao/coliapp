@@ -39,33 +39,40 @@ import 'package:url_launcher/url_launcher.dart';
 /// 收藏为本人书签数据，仅 isOwner 显示）。
 class ColibriProfileScreen extends StatefulWidget {
   final String? username; // 传 username 查看他人；null 查看当前登录用户
+  final bool active;
 
-  const ColibriProfileScreen({super.key, this.username}) : _testProfile = null;
+  const ColibriProfileScreen({super.key, this.username, this.active = true})
+      : _testProfile = null;
 
   @visibleForTesting
   const ColibriProfileScreen.withTestProfile({
     super.key,
     required ColibriProfile profile,
   })  : username = null,
+        active = true,
         _testProfile = profile;
 
   final ColibriProfile? _testProfile;
 
   @override
-  State<ColibriProfileScreen> createState() => _ColibriProfileScreenState();
+  ColibriProfileScreenState createState() => ColibriProfileScreenState();
 }
 
-class _ColibriProfileScreenState extends State<ColibriProfileScreen>
+class ColibriProfileScreenState extends State<ColibriProfileScreen>
     with SingleTickerProviderStateMixin {
   // ===== 布局常量 =====
   static const double _appBarH = 56; // AppBar 工具区高度
-  static const double _coverH = 240; // 封面高度（屏幕顶 → 头像中线）
+  static const double _coverAspectRatio = 16 / 9;
   static const double _avatarD = 94;
   static const double _overlap = 47; // 头像下半段高度（中线 → AppBar 底边）
   static const double _padH = 18;
 
   double _statusBarH(BuildContext context) =>
       MediaQuery.of(context).padding.top;
+
+  double _coverH(BuildContext context) =>
+      MediaQuery.sizeOf(context).width / _coverAspectRatio -
+      _statusBarH(context);
 
   TabController? _tabController;
 
@@ -76,10 +83,10 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   int get _mediaIndex => _isGuestView ? 1 : (_hasBookmarksTab ? 2 : 1);
   int get _infoIndex => _hasBookmarksTab ? 3 : 2;
   List<String> get _tabLabels => [
-        '帖子',
-        if (_hasBookmarksTab) '收藏',
-        '媒体',
-        if (!_isGuestView) '信息',
+        LKeys.feedPost.tr,
+        if (_hasBookmarksTab) LKeys.feedSave.tr,
+        LKeys.profileMedia.tr,
+        if (!_isGuestView) LKeys.profileInfo.tr,
       ];
 
   ColibriProfile? _profile;
@@ -108,15 +115,37 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     _bioTranslationTarget = _currentBioTranslationTarget;
   }
 
-  // 帖子 tab
+  // 帖子 tab：接口把个人主页置顶帖子与普通帖子分开返回。
+  final List<ColibriPost> _profilePinnedPosts = [];
   final List<ColibriPost> _posts = [];
   bool _loadingPosts = false;
+  bool _postsRequestInProgress = false;
+  bool _postsRefreshQueued = false;
+  bool _profilePinRequestInProgress = false;
   bool _hasMorePosts = true;
+  int _postsRequestRevision = 0;
   int? _postsCursor;
+  int? _publishedPostId;
+  final GlobalKey _publishedPostKey = GlobalKey();
+  bool _coverCollapsed = false;
+
+  bool _trackProfileScroll(ScrollNotification notification) {
+    if (notification.depth == 0) {
+      final collapsed = notification.metrics.pixels > _coverH(context) - 24;
+
+      if (collapsed != _coverCollapsed && mounted) {
+        setState(() => _coverCollapsed = collapsed);
+      }
+    }
+    return false;
+  }
 
   // 媒体 tab（filter type=media，非纯文本帖）
   final List<ColibriPost> _media = [];
   bool _loadingMedia = false;
+  bool _mediaRequestInProgress = false;
+  bool _mediaRefreshQueued = false;
+  int _mediaRequestRevision = 0;
   bool _hasMoreMedia = true;
   int? _mediaCursor;
   bool _mediaLoaded = false; // 首次进入该 tab 才加载
@@ -126,6 +155,10 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   bool _loadingDetails = false;
   bool _detailsLoaded = false;
   bool _detailsFailed = false;
+  int _detailsRequestRevision = 0;
+  bool _profileLoadInProgress = false;
+  bool _refreshRequested = false;
+  bool _wasActive = false;
 
   @override
   void initState() {
@@ -140,6 +173,16 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       return;
     }
     _load();
+    _wasActive = widget.active;
+  }
+
+  @override
+  void didUpdateWidget(covariant ColibriProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.username == null && widget.active && !_wasActive) {
+      _refreshMyProfile();
+    }
+    _wasActive = widget.active;
   }
 
   @override
@@ -154,6 +197,29 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   void dispose() {
     _tabController?.dispose();
     super.dispose();
+  }
+
+  void showPublishedPost(ColibriPost post) {
+    if (_profile?.isOwner != true || !mounted) return;
+    _postsRequestRevision++;
+    _publishedPostId = post.id;
+    _loadingPosts = _postsRequestInProgress;
+    setState(() {
+      _posts.removeWhere((item) => item.id == post.id);
+      _posts.insert(0, post);
+      _postsCursor ??= post.id;
+      _hasMorePosts = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final postContext = _publishedPostKey.currentContext;
+      if (postContext != null) {
+        Scrollable.ensureVisible(
+          postContext,
+          alignment: 0,
+          duration: Duration.zero,
+        );
+      }
+    });
   }
 
   /// 按资料身份（是否本人）确保 TabController 长度正确（资料加载后可能从 3 → 4）。
@@ -183,6 +249,11 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_profileLoadInProgress) {
+      if (silent) _refreshRequested = true;
+      return;
+    }
+    _profileLoadInProgress = true;
     final revision = ++_loadRevision;
     final stopwatch = Stopwatch()..start();
     Loggers.info(
@@ -191,9 +262,6 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       setState(() {
         if (!silent) _loading = true;
         _loadError = null;
-        _loadingPosts = false;
-        _loadingMedia = false;
-        _loadingDetails = false;
       });
     }
     try {
@@ -238,8 +306,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           _loading = false;
         });
         _ensureTabController();
-        _hasMorePosts = true;
-        _loadPosts(reset: true);
+        if (_profile!.isOwner) _loadDetails();
       }
 
       final username =
@@ -260,9 +327,14 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         _hasMorePosts = true;
         _loadPosts(reset: true);
         _mediaLoaded = false;
-        _detailsLoaded = false;
-        _details = null;
+        if (!_detailsLoaded && !_loadingDetails) {
+          _details = null;
+          _detailsFailed = false;
+        }
         _onTabVisited(_tabController?.index ?? 0);
+        if (_profile!.isOwner && !_detailsLoaded && !_loadingDetails) {
+          _loadDetails();
+        }
       }
     } catch (e) {
       Loggers.error(
@@ -274,7 +346,12 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         });
       }
     } finally {
+      _profileLoadInProgress = false;
       if (_isCurrent(revision) && !silent) setState(() => _loading = false);
+      if (_refreshRequested && mounted) {
+        _refreshRequested = false;
+        _refreshMyProfile();
+      }
       Loggers.info(
           'profile.load.finish revision=$revision current=${_isCurrent(revision)} elapsedMs=${stopwatch.elapsedMilliseconds} loading=$_loading hasProfile=${_profile != null} hasError=${_loadError != null}');
     }
@@ -282,8 +359,90 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
 
   bool _isCurrent(int revision) => mounted && revision == _loadRevision;
 
+  void _refreshMyProfile() {
+    _hasMorePosts = true;
+    _load(silent: _profile != null);
+  }
+
+  Future<void> _refreshProfilePosts() async {
+    _postsRequestRevision++;
+    _hasMorePosts = true;
+    if (_postsRequestInProgress) {
+      _postsRefreshQueued = true;
+      return;
+    }
+    await _loadPosts(reset: true);
+  }
+
+  Future<void> _setProfilePin(ColibriPost post) async {
+    if (_profile?.isOwner != true || _profilePinRequestInProgress) return;
+    final profileId = _profile!.id;
+    _profilePinRequestInProgress = true;
+    try {
+      final pinned = await ColibriSocialService.shared.setProfilePin(
+        post.id,
+        pinned: !post.isProfilePinned,
+      );
+      if (!mounted || _profile?.id != profileId) return;
+      final updatedPost = post.copyWith(isProfilePinned: pinned);
+      setState(() {
+        _profilePinnedPosts.removeWhere((item) => item.id == post.id);
+        _posts.removeWhere((item) => item.id == post.id);
+        if (pinned) {
+          _profilePinnedPosts.insert(0, updatedPost);
+        } else {
+          _posts
+            ..add(updatedPost)
+            ..sort((a, b) => b.id.compareTo(a.id));
+        }
+        final mediaIndex = _media.indexWhere((item) => item.id == post.id);
+        if (mediaIndex >= 0) _media[mediaIndex] = updatedPost;
+      });
+      showColibriToast(
+        pinned ? LKeys.profilePostPinned.tr : LKeys.profilePostUnpinned.tr,
+        message: '',
+        backgroundColor: cGreen,
+        colorText: Colors.white,
+      );
+      await _refreshProfilePosts();
+    } catch (e) {
+      if (!mounted || _profile?.id != profileId) return;
+      showColibriToast(
+        LKeys.profilePostPinFailed.tr,
+        message: e.toString(),
+        backgroundColor: cRed,
+        colorText: Colors.white,
+      );
+    } finally {
+      _profilePinRequestInProgress = false;
+    }
+  }
+
   void _replaceProfile(ColibriProfile profile) {
-    if (_profile?.id != profile.id || _profile?.bio != profile.bio) {
+    final profileChanged = _profile?.id != profile.id;
+    if (profileChanged) {
+      _detailsRequestRevision++;
+      _details = null;
+      _loadingDetails = false;
+      _detailsLoaded = false;
+      _detailsFailed = false;
+
+      // 资料切换时丢弃旧列表；在途请求结束后为新资料重新加载。
+      _postsRequestRevision++;
+      _postsRefreshQueued = _postsRequestInProgress;
+      _profilePinnedPosts.clear();
+      _posts.clear();
+      _postsCursor = null;
+      _hasMorePosts = true;
+      _mediaRequestRevision++;
+      _loadingMedia = false;
+      _mediaRefreshQueued = _mediaRequestInProgress;
+      _media.clear();
+      _mediaCursor = null;
+      _hasMoreMedia = true;
+      _mediaLoaded = false;
+    }
+    if (profileChanged || _profile?.bio != profile.bio) {
       _resetBioTranslation();
     }
     _profile = profile;
@@ -366,13 +525,24 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   // ===================== 列表加载 =====================
 
   Future<void> _loadPosts({bool reset = false}) async {
-    if (_profile == null || _loadingPosts || (!_hasMorePosts && !reset)) return;
+    if (_profile == null) return;
+    if (_postsRequestInProgress) {
+      if (reset) {
+        _postsRequestRevision++;
+        _postsRefreshQueued = true;
+        _hasMorePosts = true;
+      }
+      return;
+    }
+    if (!_hasMorePosts && !reset) return;
     final revision = _loadRevision;
+    final requestRevision = ++_postsRequestRevision;
     final profileId = _profile!.id;
     if (!mounted) return;
+    _postsRequestInProgress = true;
     setState(() => _loadingPosts = true);
     try {
-      final list = _isGuestView
+      final page = _isGuestView
           ? await ColibriGuestService.shared.fetchProfilePosts(
               _profile!.username,
               cursor: reset ? null : _postsCursor,
@@ -383,42 +553,62 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
               cursor: reset ? null : _postsCursor,
               type: 'posts',
             );
-      if (!_isCurrent(revision) || _profile?.id != profileId) return;
+      if (!_isCurrent(revision) ||
+          _profile?.id != profileId ||
+          requestRevision != _postsRequestRevision) {
+        return;
+      }
       setState(() {
         if (reset) {
+          _profilePinnedPosts
+            ..clear()
+            ..addAll(page.pinned);
           _posts
             ..clear()
-            ..addAll(list);
-          _postsCursor = null;
-          _hasMorePosts = true;
+            ..addAll(page.posts);
         } else {
-          _posts.addAll(list);
+          final existingIds = _posts.map((post) => post.id).toSet();
+          _posts.addAll(page.posts.where((post) => existingIds.add(post.id)));
         }
-        if (list.isNotEmpty) {
-          _postsCursor = list.last.id;
-        } else {
-          _hasMorePosts = false;
-        }
+        _postsCursor = page.nextCursor;
+        _hasMorePosts = page.hasMore;
       });
     } catch (_) {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
+      if (_isCurrent(revision) &&
+          _profile?.id == profileId &&
+          requestRevision == _postsRequestRevision) {
         _hasMorePosts = false;
       }
     } finally {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
-        setState(() => _loadingPosts = false);
+      _postsRequestInProgress = false;
+      if (mounted) setState(() => _loadingPosts = false);
+      if (_postsRefreshQueued && mounted && _profile != null) {
+        _postsRefreshQueued = false;
+        _hasMorePosts = true;
+        _loadPosts(reset: true);
       }
     }
   }
 
   Future<void> _loadMedia({bool reset = false}) async {
-    if (_profile == null || _loadingMedia || (!_hasMoreMedia && !reset)) return;
+    if (_profile == null) return;
+    if (_mediaRequestInProgress) {
+      if (reset) {
+        _mediaRequestRevision++;
+        _mediaRefreshQueued = true;
+        _hasMoreMedia = true;
+      }
+      return;
+    }
+    if (!_hasMoreMedia && !reset) return;
     final revision = _loadRevision;
+    final requestRevision = ++_mediaRequestRevision;
     final profileId = _profile!.id;
     if (!mounted) return;
+    _mediaRequestInProgress = true;
     setState(() => _loadingMedia = true);
     try {
-      final list = _isGuestView
+      final page = _isGuestView
           ? await ColibriGuestService.shared.fetchProfilePosts(
               _profile!.username,
               cursor: reset ? null : _mediaCursor,
@@ -429,38 +619,52 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
               cursor: reset ? null : _mediaCursor,
               type: 'media',
             );
-      if (!_isCurrent(revision) || _profile?.id != profileId) return;
+      if (!_isCurrent(revision) ||
+          _profile?.id != profileId ||
+          requestRevision != _mediaRequestRevision) {
+        return;
+      }
       setState(() {
         if (reset) {
           _media
             ..clear()
-            ..addAll(list);
-          _mediaCursor = null;
-          _hasMoreMedia = true;
+            ..addAll(page.posts);
         } else {
-          _media.addAll(list);
+          final existingIds = _media.map((post) => post.id).toSet();
+          _media.addAll(page.posts.where((post) => existingIds.add(post.id)));
         }
-        if (list.isNotEmpty) {
-          _mediaCursor = list.last.id;
-        } else {
-          _hasMoreMedia = false;
-        }
+        _mediaCursor = page.nextCursor;
+        _hasMoreMedia = page.hasMore;
       });
     } catch (_) {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
+      if (_isCurrent(revision) &&
+          _profile?.id == profileId &&
+          requestRevision == _mediaRequestRevision) {
         _hasMoreMedia = false;
       }
     } finally {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
-        _mediaLoaded = true;
-        setState(() => _loadingMedia = false);
+      _mediaRequestInProgress = false;
+      if (mounted) {
+        setState(() {
+          _loadingMedia = false;
+          if (_isCurrent(revision) &&
+              _profile?.id == profileId &&
+              requestRevision == _mediaRequestRevision) {
+            _mediaLoaded = true;
+          }
+        });
+      }
+      if (_mediaRefreshQueued && mounted && _profile != null) {
+        _mediaRefreshQueued = false;
+        _hasMoreMedia = true;
+        _loadMedia(reset: true);
       }
     }
   }
 
   Future<void> _loadDetails() async {
     if (_profile == null || _loadingDetails) return;
-    final revision = _loadRevision;
+    final revision = ++_detailsRequestRevision;
     final profileId = _profile!.id;
     if (!mounted) return;
     setState(() {
@@ -470,14 +674,22 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     try {
       final details =
           await ColibriSocialService.shared.fetchProfileDetails(profileId);
-      if (!_isCurrent(revision) || _profile?.id != profileId) return;
+      if (!mounted ||
+          revision != _detailsRequestRevision ||
+          _profile?.id != profileId) {
+        return;
+      }
       setState(() => _details = details);
     } catch (_) {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
+      if (mounted &&
+          revision == _detailsRequestRevision &&
+          _profile?.id == profileId) {
         _detailsFailed = true;
       }
     } finally {
-      if (_isCurrent(revision) && _profile?.id == profileId) {
+      if (mounted &&
+          revision == _detailsRequestRevision &&
+          _profile?.id == profileId) {
         _detailsLoaded = true;
         setState(() => _loadingDetails = false);
       }
@@ -500,17 +712,17 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         );
       });
       if (result.requested) {
-        showColibriToast('已发送关注请求',
-            message: '对方批准后即可成为粉丝',
+        showColibriToast(LKeys.socialFollowRequestSent.tr,
+            message: LKeys.profileFollowRequestPendingDesc.tr,
             backgroundColor: cPrimary,
             colorText: Colors.white);
       } else if (!result.following && profile.isFollowRequested) {
-        showColibriToast('已取消关注请求',
+        showColibriToast(LKeys.profileFollowRequestCancelled.tr,
             message: '', backgroundColor: cLightBg, colorText: cMainText);
       }
       HapticManager.shared.light();
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -522,8 +734,10 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     if (profile == null) return;
     // 对方「谁能私信我」设置不允许时直接提示，无需请求服务器
     if (!profile.canMessage) {
-      showColibriToast('无法发起私信',
-          message: '对方已限制谁能私信', backgroundColor: cRed, colorText: Colors.white);
+      showColibriToast(LKeys.profileCannotStartDm.tr,
+          message: LKeys.profileDmRestrictedDesc.tr,
+          backgroundColor: cRed,
+          colorText: Colors.white);
       return;
     }
     try {
@@ -541,7 +755,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
             opaque: false);
       }
     } catch (e) {
-      showColibriToast('无法发起聊天',
+      showColibriToast(LKeys.profileCannotStartChat.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -556,10 +770,11 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       context,
       icon:
           wasBlocked ? Icons.person_remove_alt_1_rounded : Icons.block_rounded,
-      title: wasBlocked ? '解除拉黑' : '拉黑用户',
-      message:
-          wasBlocked ? '确定解除对 ${profile.name} 的拉黑？' : '确定拉黑 ${profile.name}？',
-      confirmText: wasBlocked ? '解除拉黑' : '拉黑',
+      title: wasBlocked ? LKeys.profileUnblock.tr : LKeys.profileBlockUser.tr,
+      message: wasBlocked
+          ? LKeys.profileUnblockConfirm.trParams({'p1': '${profile.name}'})
+          : LKeys.profileBlockConfirm.trParams({'p1': '${profile.name}'}),
+      confirmText: wasBlocked ? LKeys.profileUnblock.tr : LKeys.profileBlock.tr,
       danger: !wasBlocked,
       onConfirm: () async {
         try {
@@ -567,12 +782,15 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
               await ColibriSocialService.shared.toggleBlock(profile.id);
           if (!mounted) return false;
           setState(() => _profile = profile.copyWith(isBlocked: blocked));
-          showColibriToast(blocked ? '已拉黑' : '已解除拉黑',
-              message: '', backgroundColor: cGreen, colorText: Colors.white);
+          showColibriToast(
+              blocked ? LKeys.profileBlocked.tr : LKeys.socialUnblocked.tr,
+              message: '',
+              backgroundColor: cGreen,
+              colorText: Colors.white);
           return true;
         } catch (e) {
           if (mounted) {
-            showColibriToast('操作失败',
+            showColibriToast(LKeys.commonActionFailed.tr,
                 message: e.toString(),
                 backgroundColor: cRed,
                 colorText: Colors.white);
@@ -590,12 +808,12 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     try {
       final muted = await ColibriSocialService.shared.toggleMute(profile.id);
       setState(() => _profile = profile.copyWith(isMuted: muted));
-      showColibriToast(muted ? '已静音' : '已取消静音',
-          message: muted ? '将不再收到该用户的通知' : '',
+      showColibriToast(muted ? LKeys.profileMuted.tr : LKeys.socialUnmuted.tr,
+          message: muted ? LKeys.profileMutedDesc.tr : '',
           backgroundColor: cGreen,
           colorText: Colors.white);
     } catch (e) {
-      showColibriToast('操作失败',
+      showColibriToast(LKeys.commonActionFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -629,7 +847,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      showColibriToast('举报失败',
+      showColibriToast(LKeys.feedReportFailed.tr,
           message: e.toString(),
           backgroundColor: cRed,
           colorText: Colors.white);
@@ -646,7 +864,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
 
   void _copyLink() {
     Clipboard.setData(ClipboardData(text: _profileLink));
-    showColibriToast('已复制',
+    showColibriToast(LKeys.profileCopied.tr,
         message: _profileLink,
         backgroundColor: cGreen,
         colorText: Colors.white,
@@ -665,7 +883,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
-      showColibriToast('无法打开链接',
+      showColibriToast(LKeys.profileCannotOpenLink.tr,
           message: url, backgroundColor: cRed, colorText: Colors.white);
     }
   }
@@ -677,11 +895,11 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     if (_isGuestView) {
       showColibriSheet(
         context,
-        title: '主页操作',
+        title: LKeys.profileActions.tr,
         items: [
           ColibriSheetItem(
             icon: Icons.link_rounded,
-            label: '复制主页链接',
+            label: LKeys.profileCopyLink.tr,
             onTap: _copyLink,
           ),
         ],
@@ -690,17 +908,17 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     }
     showColibriSheet(
       context,
-      title: '主页操作',
+      title: LKeys.profileActions.tr,
       items: [
         ColibriSheetItem(
           icon: Icons.link_rounded,
-          label: '复制主页链接',
+          label: LKeys.profileCopyLink.tr,
           onTap: _copyLink,
         ),
         if (profile.canReport)
           ColibriSheetItem(
             icon: Icons.report_gmailerrorred_rounded,
-            label: '举报用户',
+            label: LKeys.profileReportUser.tr,
             onTap: _reportProfile,
             danger: true,
           ),
@@ -708,16 +926,19 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           icon: profile.isMuted
               ? Icons.volume_off_rounded
               : Icons.notifications_off_rounded,
-          label: profile.isMuted ? '取消静音' : '静音',
-          subtitle: profile.isMuted ? null : '不再收到该用户的通知',
+          label:
+              profile.isMuted ? LKeys.profileUnmute.tr : LKeys.profileMute.tr,
+          subtitle: profile.isMuted ? null : LKeys.profileMuteDesc.tr,
           onTap: _toggleMute,
         ),
         ColibriSheetItem(
           icon: profile.isBlocked
               ? Icons.person_off_rounded
               : Icons.block_rounded,
-          label: profile.isBlocked ? '解除屏蔽' : '屏蔽',
-          subtitle: '屏蔽后双方将无法看到对方、无法私信',
+          label: profile.isBlocked
+              ? LKeys.profileUnblockAction.tr
+              : LKeys.profileBlockAction.tr,
+          subtitle: LKeys.profileBlockDesc.tr,
           onTap: _toggleBlock,
           danger: !profile.isBlocked,
         ),
@@ -730,86 +951,111 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   @override
   Widget build(BuildContext context) {
     final profile = _profile;
+    final coverH = _coverH(context);
     final canPop = Navigator.of(context).canPop();
-    return Scaffold(
-      backgroundColor: cWhite,
-      body: _loading
-          ? const Center(
-              key: ValueKey('profile-loading'),
-              child: CircularProgressIndicator(color: cPrimary),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _coverCollapsed
+          ? SystemUiOverlayStyle.dark.copyWith(
+              statusBarColor: Colors.white,
+              systemStatusBarContrastEnforced: false,
             )
-          : profile == null
-              ? KeyedSubtree(
-                  key: const ValueKey('profile-error'),
-                  child: _buildLoadError(),
-                )
-              : KeyedSubtree(
-                  key: const ValueKey('profile-content'),
-                  child: NestedScrollView(
-                    headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                      // 封面即 AppBar：封面延展到状态栏下，头像也放在 flexibleSpace 内。
-                      // 关键：pinned AppBar 绘制在后续 sliver 之上，头像若从头部块向上探出，
-                      // 上半段会被 AppBar 的白色背景/封面层盖住（只显示半个的根因）。
-                      SliverAppBar(
-                        pinned: true,
-                        backgroundColor: cWhite,
-                        surfaceTintColor: Colors.transparent,
-                        elevation: 0,
-                        expandedHeight: _coverH + _overlap, // 封面 + 头像下半段
-                        collapsedHeight: _statusBarH(context) + _appBarH,
-                        toolbarHeight: _appBarH,
-                        centerTitle: false,
-                        titleSpacing: 0,
-                        leading: const SizedBox.shrink(),
-                        automaticallyImplyLeading: false,
-                        flexibleSpace: _ProfileCoverAppBar(
-                          statusBarHeight: _statusBarH(context),
-                          toolbarHeight: _appBarH,
-                          coverHeight: _coverH,
-                          avatarOverlap: _overlap,
-                          padH: _padH,
-                          username: profile.username.isEmpty
-                              ? '主页'
-                              : profile.username,
-                          isOwner: profile.isOwner,
-                          onNotifications: () => Get.to(
-                              () => const ColibriNotificationsScreen(),
-                              opaque: false),
-                          onSettings: () => Get.to(
-                              () => const ColibriSettingsScreen(),
-                              opaque: false),
-                          onMore: _showMoreMenu,
-                          showBack: canPop,
-                          cover: profile.coverUrl != null &&
-                                  profile.coverUrl!.isNotEmpty
-                              ? MyCachedImage(
-                                  imageUrl: profile.coverUrl,
-                                  width: double.infinity,
-                                  height: _coverH)
-                              : null,
-                          avatar: _buildAvatar(profile),
+          : SystemUiOverlayStyle.light.copyWith(
+              statusBarColor: Colors.transparent,
+              systemStatusBarContrastEnforced: false,
+            ),
+      child: Scaffold(
+        backgroundColor: cWhite,
+        extendBodyBehindAppBar: true,
+        body: _loading
+            ? const Center(
+                key: ValueKey('profile-loading'),
+                child: CircularProgressIndicator(color: cPrimary),
+              )
+            : profile == null
+                ? KeyedSubtree(
+                    key: const ValueKey('profile-error'),
+                    child: _buildLoadError(),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('profile-content'),
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _trackProfileScroll,
+                      child: NestedScrollView(
+                        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                          // 封面即 AppBar：封面延展到状态栏下，头像也放在 flexibleSpace 内。
+                          // 关键：pinned AppBar 绘制在后续 sliver 之上，头像若从头部块向上探出，
+                          // 上半段会被 AppBar 的白色背景/封面层盖住（只显示半个的根因）。
+                          SliverAppBar(
+                            pinned: true,
+                            systemOverlayStyle: _coverCollapsed
+                                ? SystemUiOverlayStyle.dark.copyWith(
+                                    statusBarColor: Colors.white,
+                                    systemStatusBarContrastEnforced: false,
+                                  )
+                                : SystemUiOverlayStyle.light.copyWith(
+                                    statusBarColor: Colors.transparent,
+                                    systemStatusBarContrastEnforced: false,
+                                  ),
+                            backgroundColor: cWhite,
+                            surfaceTintColor: Colors.transparent,
+                            elevation: 0,
+                            expandedHeight: coverH + _overlap,
+                            collapsedHeight: _appBarH,
+                            toolbarHeight: _appBarH,
+                            centerTitle: false,
+                            titleSpacing: 0,
+                            leading: const SizedBox.shrink(),
+                            automaticallyImplyLeading: false,
+                            flexibleSpace: _ProfileCoverAppBar(
+                              statusBarHeight: _statusBarH(context),
+                              toolbarHeight: _appBarH,
+                              coverHeight: coverH + _statusBarH(context),
+                              avatarOverlap: _overlap,
+                              padH: _padH,
+                              username: profile.username.isEmpty
+                                  ? LKeys.profileTitle.tr
+                                  : profile.username,
+                              isOwner: profile.isOwner,
+                              onNotifications: () => Get.to(
+                                  () => const ColibriNotificationsScreen(),
+                                  opaque: false),
+                              onSettings: () => Get.to(
+                                  () => const ColibriSettingsScreen(),
+                                  opaque: false),
+                              onMore: _showMoreMenu,
+                              showBack: canPop,
+                              cover: profile.coverUrl != null &&
+                                      profile.coverUrl!.isNotEmpty
+                                  ? MyCachedImage(
+                                      imageUrl: profile.coverUrl,
+                                      width: double.infinity,
+                                      height: coverH + _statusBarH(context))
+                                  : null,
+                              avatar: _buildAvatar(profile),
+                            ),
+                          ),
+                          // 身份信息（头像在上方 AppBar 内，底边与本块顶线相接）
+                          SliverToBoxAdapter(child: _buildHeader(profile)),
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _ProfileTabBarDelegate(_tabController!,
+                                labels: _tabLabels),
+                          ),
+                        ],
+                        body: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildPostsTab(),
+                            if (_hasBookmarksTab) const ColibriBookmarksView(),
+                            _buildMediaTab(),
+                            // 访客无「信息」tab（信息/联系方式为登录后可见）
+                            if (!_isGuestView) _buildInfoTab(),
+                          ],
                         ),
                       ),
-                      // 身份信息（头像在上方 AppBar 内，底边与本块顶线相接）
-                      SliverToBoxAdapter(child: _buildHeader(profile)),
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _ProfileTabBarDelegate(_tabController!,
-                            labels: _tabLabels),
-                      ),
-                    ],
-                    body: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildPostsTab(),
-                        if (_hasBookmarksTab) const ColibriBookmarksView(),
-                        _buildMediaTab(),
-                        // 访客无「信息」tab（信息/联系方式为登录后可见）
-                        if (!_isGuestView) _buildInfoTab(),
-                      ],
                     ),
                   ),
-                ),
+      ),
     );
   }
 
@@ -1025,7 +1271,9 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
                     const Icon(Icons.calendar_month_outlined,
                         size: 15, color: cLightIcon),
                     const SizedBox(width: 4),
-                    Text('加入于 ${profile.joinDateFormatted}',
+                    Text(
+                        LKeys.profileJoinDate
+                            .trParams({'p1': '${profile.joinDateFormatted}'}),
                         style:
                             const TextStyle(fontSize: 13, color: cLightText)),
                   ],
@@ -1039,29 +1287,35 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           children: [
             _StatBlock(
               count: ColibriProfile.abbreviate(profile.followersCount),
-              label: '粉丝',
+              label: LKeys.profileFollowers.tr,
               onTap: () => _isGuestView
-                  ? AuthGate.requireLogin(() {}, feature: '查看粉丝列表')
+                  ? AuthGate.requireLogin(() {},
+                      feature: LKeys.profileViewFollowers.tr)
                   : Get.to(
                       () => ColibriConnectionsScreen(
-                          userId: profile.id, title: '粉丝', following: false),
+                          userId: profile.id,
+                          title: LKeys.profileFollowers.tr,
+                          following: false),
                       opaque: false),
             ),
             const SizedBox(width: 26),
             _StatBlock(
               count: ColibriProfile.abbreviate(profile.followingCount),
-              label: '关注',
+              label: LKeys.feedFollow.tr,
               onTap: () => _isGuestView
-                  ? AuthGate.requireLogin(() {}, feature: '查看关注列表')
+                  ? AuthGate.requireLogin(() {},
+                      feature: LKeys.profileViewFollowing.tr)
                   : Get.to(
                       () => ColibriConnectionsScreen(
-                          userId: profile.id, title: '关注', following: true),
+                          userId: profile.id,
+                          title: LKeys.feedFollow.tr,
+                          following: true),
                       opaque: false),
             ),
             const SizedBox(width: 26),
             _StatBlock(
                 count: ColibriProfile.abbreviate(profile.publicationsCount),
-                label: '帖子'),
+                label: LKeys.feedPost.tr),
           ],
         ),
         const SizedBox(height: 16),
@@ -1079,17 +1333,19 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         children: [
           Expanded(
             child: _PillButton(
-              text: '关注',
+              text: LKeys.feedFollow.tr,
               filled: true,
-              onTap: () => AuthGate.requireLogin(() {}, feature: '关注作者'),
+              onTap: () => AuthGate.requireLogin(() {},
+                  feature: LKeys.profileFollowAuthor.tr),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: _PillButton(
-              text: '私信',
+              text: LKeys.settingsDirectMessages.tr,
               icon: Icons.chat_bubble_outline_rounded,
-              onTap: () => AuthGate.requireLogin(() {}, feature: '发送私信'),
+              onTap: () => AuthGate.requireLogin(() {},
+                  feature: LKeys.profileSendMessage.tr),
             ),
           ),
         ],
@@ -1100,7 +1356,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         children: [
           Expanded(
             child: _PillButton(
-              text: '编辑资料',
+              text: LKeys.socialEditProfile.tr,
               icon: Icons.edit_outlined,
               onTap: () async {
                 await Get.to(() => const ColibriEditProfileScreen(),
@@ -1127,8 +1383,10 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           Expanded(
             child: _PillButton(
               text: profile.isFollowing
-                  ? '已关注'
-                  : (profile.isFollowRequested ? '待确认' : '关注'),
+                  ? LKeys.socialFollowing.tr
+                  : (profile.isFollowRequested
+                      ? LKeys.profileRequestPending.tr
+                      : LKeys.feedFollow.tr),
               filled: !profile.isFollowing,
               onTap: _toggleFollow,
             ),
@@ -1137,7 +1395,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
         if (hasMessage)
           Expanded(
             child: _PillButton(
-              text: '私信',
+              text: LKeys.settingsDirectMessages.tr,
               icon: Icons.chat_bubble_outline_rounded,
               onTap: _openChat,
             ),
@@ -1156,10 +1414,12 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     }
     return _postList(
       posts: _posts,
+      pinnedPosts: _profilePinnedPosts,
       loading: _loadingPosts,
-      emptyText: '还没有帖子',
+      emptyText: LKeys.profileNoPostsYet.tr,
       onRefresh: () => _load(silent: true),
       onLoadMore: _loadPosts,
+      showProfilePinAction: _profile?.isOwner == true,
     );
   }
 
@@ -1172,7 +1432,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
     return _postList(
       posts: _media,
       loading: _loadingMedia,
-      emptyText: '还没有媒体内容',
+      emptyText: LKeys.profileNoMediaYet.tr,
       onRefresh: () => _load(silent: true),
       onLoadMore: _loadMedia,
     );
@@ -1180,11 +1440,14 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
 
   Widget _postList({
     required List<ColibriPost> posts,
+    List<ColibriPost> pinnedPosts = const [],
     required bool loading,
     required String emptyText,
     required Future<void> Function() onRefresh,
     required Future<void> Function({bool reset}) onLoadMore,
+    bool showProfilePinAction = false,
   }) {
+    final displayedPosts = [...pinnedPosts, ...posts];
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
         if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) onLoadMore();
@@ -1193,7 +1456,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       child: RefreshIndicator(
         color: cPrimary,
         onRefresh: onRefresh,
-        child: posts.isEmpty && !loading
+        child: displayedPosts.isEmpty && !loading
             ? ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -1205,37 +1468,76 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
                 ],
               )
             : ListView.separated(
+                key: posts == _posts
+                    ? const PageStorageKey('profile-posts')
+                    : null,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 6, bottom: 24),
-                itemCount: posts.length + (loading ? 1 : 0),
+                padding: EdgeInsets.only(
+                  top: 6,
+                  bottom: MediaQuery.of(context).padding.bottom + 104,
+                ),
+                itemCount: displayedPosts.length +
+                    (pinnedPosts.isNotEmpty ? 1 : 0) +
+                    (loading ? 1 : 0),
                 separatorBuilder: (context, index) {
-                  if (index < posts.length - 1) {
-                    return const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: cLightBg,
-                    );
+                  final headerCount = pinnedPosts.isNotEmpty ? 1 : 0;
+                  if (index < headerCount ||
+                      index - headerCount >= displayedPosts.length - 1) {
+                    return const SizedBox.shrink();
                   }
-                  return const SizedBox.shrink();
+                  return const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: cLightBg,
+                  );
                 },
                 itemBuilder: (context, index) {
-                  if (index >= posts.length) {
+                  final headerCount = pinnedPosts.isNotEmpty ? 1 : 0;
+                  if (headerCount == 1 && index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.push_pin_outlined,
+                              size: 16, color: cBlueTick),
+                          const SizedBox(width: 6),
+                          Text(
+                            LKeys.profilePinned.tr,
+                            style: const TextStyle(
+                              color: cBlueTick,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  if (index >= displayedPosts.length + headerCount) {
                     return const Padding(
                       padding: EdgeInsets.all(16),
                       child: Center(
                           child: CircularProgressIndicator(color: cPrimary)),
                     );
                   }
-                  final p = posts[index];
-                  return ColibriPostCard(
-                    key: ValueKey('profile_${p.id}'),
-                    post: p,
-                    onChanged: () => onLoadMore(reset: true),
-                    onTap: () async {
-                      await Get.to(() => ColibriPostDetailScreen(post: p),
-                          opaque: false);
-                      onLoadMore(reset: true);
-                    },
+                  final postIndex = index - headerCount;
+                  final p = displayedPosts[postIndex];
+                  final isPublishedPost =
+                      posts == _posts && p.id == _publishedPostId;
+                  return KeyedSubtree(
+                    key: isPublishedPost ? _publishedPostKey : null,
+                    child: ColibriPostCard(
+                      key: ValueKey('profile_${p.id}'),
+                      post: p,
+                      showProfilePinAction: showProfilePinAction,
+                      onProfilePinChanged: _setProfilePin,
+                      onChanged: () => onLoadMore(reset: true),
+                      onTap: () async {
+                        await Get.to(() => ColibriPostDetailScreen(post: p),
+                            opaque: false);
+                        onLoadMore(reset: true);
+                      },
+                    ),
                   );
                 },
               ),
@@ -1246,7 +1548,7 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
   // ===================== 信息 tab（对齐网页 ProfileInfo） =====================
 
   Widget _buildInfoTab() {
-    if (_loadingDetails) {
+    if (_loadingDetails || !_detailsLoaded) {
       return const Center(child: CircularProgressIndicator(color: cPrimary));
     }
     if (_detailsFailed || _details == null) {
@@ -1256,16 +1558,16 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           children: [
             const Icon(Icons.info_outline_rounded, size: 40, color: cLightIcon),
             const SizedBox(height: 10),
-            const Text('信息不可用',
-                style: TextStyle(color: cLightText, fontSize: 14)),
+            Text(LKeys.profileInfoUnavailable.tr,
+                style: const TextStyle(color: cLightText, fontSize: 14)),
             const SizedBox(height: 14),
             TextButton(
               onPressed: () {
                 _detailsLoaded = false;
                 _loadDetails();
               },
-              child: const Text('重试',
-                  style: TextStyle(
+              child: Text(LKeys.commonRetry.tr,
+                  style: const TextStyle(
                       color: cHashtagColor, fontWeight: FontWeight.w600)),
             ),
           ],
@@ -1278,26 +1580,33 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
       padding: const EdgeInsets.only(bottom: 40),
       children: [
         const SizedBox(height: 6),
-        _sectionTitle('信息'),
+        _sectionTitle(LKeys.profileInfo.tr),
         _InfoRow(
             icon: Icons.calendar_month_rounded,
-            label: '加入时间',
+            label: LKeys.profileJoinedLabel.tr,
             value: d.joinDate),
         if (d.location.isNotEmpty)
           _InfoRow(
-              icon: Icons.location_on_rounded, label: '位置', value: d.location),
+              icon: Icons.location_on_rounded,
+              label: LKeys.profileLocationLabel.tr,
+              value: d.location),
         if (d.birthdate.isNotEmpty)
-          _InfoRow(icon: Icons.cake_rounded, label: '生日', value: d.birthdate),
+          _InfoRow(
+              icon: Icons.cake_rounded,
+              label: LKeys.socialBirthday.tr,
+              value: d.birthdate),
         if (d.age != null)
           _InfoRow(
-              icon: Icons.person_rounded, label: '年龄', value: '${d.age} 岁'),
+              icon: Icons.person_rounded,
+              label: LKeys.profileAgeLabel.tr,
+              value: LKeys.profileAgeValue.trParams({'p1': '${d.age}'})),
         if (d.gender.isNotEmpty)
           _InfoRow(
               icon: Icons.face_retouching_natural_rounded,
-              label: '性别',
+              label: LKeys.socialGender.tr,
               value: d.gender),
         if (d.email != null || d.phone != null) ...[
-          _sectionTitle('联系方式'),
+          _sectionTitle(LKeys.profileContactInfo.tr),
           if (d.email != null)
             _InfoRow(
                 icon: Icons.mail_rounded,
@@ -1307,12 +1616,12 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           if (d.phone != null)
             _InfoRow(
                 icon: Icons.phone_rounded,
-                label: '电话',
+                label: LKeys.profilePhone.tr,
                 value: d.phone!,
                 copyable: true),
         ],
         if (d.socialLinks.isNotEmpty) ...[
-          _sectionTitle('社交链接'),
+          _sectionTitle(LKeys.profileSocialLinks.tr),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: _padH, vertical: 6),
             child: Wrap(
@@ -1347,11 +1656,12 @@ class _ColibriProfileScreenState extends State<ColibriProfileScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('部分信息已根据用户隐私设置隐藏',
-                  style: TextStyle(fontSize: 12, color: cLightText)),
+              Text(LKeys.profilePrivacyHidden.tr,
+                  style: const TextStyle(fontSize: 12, color: cLightText)),
               if (d.lastActive.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text('最后活跃于 ${d.lastActive}',
+                Text(
+                    LKeys.profileLastActive.trParams({'p1': '${d.lastActive}'}),
                     style: const TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w600,
@@ -1631,35 +1941,97 @@ class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
   final List<String> labels;
   _ProfileTabBarDelegate(this.controller, {required this.labels});
 
-  static const double _h = 52;
+  static const double _h = 68;
+
+  IconData _iconFor(int index) {
+    switch (index) {
+      case 0:
+        return Icons.grid_view_rounded;
+      case 1:
+        return Icons.bookmark_rounded;
+      case 2:
+        return Icons.photo_library_rounded;
+      default:
+        return Icons.info_rounded;
+    }
+  }
 
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return SizedBox(
-      height: _h,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: cWhite,
-          border: Border(bottom: BorderSide(color: cLightBg, width: 1)),
-        ),
-        child: TabBar(
-          controller: controller,
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicatorPadding:
-              const EdgeInsets.symmetric(horizontal: 28, vertical: 9),
-          indicator: BoxDecoration(
-            color: cPrimary.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(11),
+    final animation = controller.animation;
+    return ColoredBox(
+      color: cWhite,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: cBG,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: cLightBg.withValues(alpha: 0.75)),
           ),
-          labelColor: cGreen,
-          unselectedLabelColor: cLightText,
-          labelStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-          unselectedLabelStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          splashFactory: NoSplash.splashFactory,
-          tabs: [for (final label in labels) Tab(text: label)],
+          child: LayoutBuilder(
+            builder: (context, constraints) => AnimatedBuilder(
+              animation: animation ?? controller,
+              builder: (context, _) {
+                final segmentWidth = constraints.maxWidth / labels.length;
+                final tabPosition =
+                    (animation?.value ?? controller.index.toDouble())
+                        .clamp(0.0, labels.length - 1.0);
+                final selectedOffset = tabPosition * segmentWidth;
+                return Stack(
+                  children: [
+                    PositionedDirectional(
+                      start: selectedOffset,
+                      top: 0,
+                      bottom: 0,
+                      width: segmentWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: cPrimary,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cBlack.withValues(alpha: 0.14),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        for (var index = 0; index < labels.length; index++)
+                          Expanded(
+                            child: _ProfileTabButton(
+                              label: labels[index],
+                              icon: _iconFor(index),
+                              selectionProgress:
+                                  (1 - (tabPosition - index).abs())
+                                      .clamp(0.0, 1.0),
+                              onTap: () {
+                                if (controller.index != index) {
+                                  HapticFeedback.selectionClick();
+                                  controller.animateTo(
+                                    index,
+                                    duration: const Duration(milliseconds: 360),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -1675,6 +2047,74 @@ class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(covariant _ProfileTabBarDelegate oldDelegate) =>
       oldDelegate.controller != controller ||
       !listEquals(oldDelegate.labels, labels);
+}
+
+class _ProfileTabButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final double selectionProgress;
+  final VoidCallback onTap;
+
+  const _ProfileTabButton({
+    required this.label,
+    required this.icon,
+    required this.selectionProgress,
+    required this.onTap,
+  });
+
+  @override
+  State<_ProfileTabButton> createState() => _ProfileTabButtonState();
+}
+
+class _ProfileTabButtonState extends State<_ProfileTabButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = Color.lerp(
+      cLightText,
+      cWhite,
+      widget.selectionProgress,
+    )!;
+    return Semantics(
+      button: true,
+      selected: widget.selectionProgress >= 0.5,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(widget.icon, size: 18, color: foreground),
+              const SizedBox(height: 3),
+              Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.lerp(
+                    FontWeight.w600,
+                    FontWeight.w700,
+                    widget.selectionProgress,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// 统计块（数字加粗 + 灰色标签）。
@@ -1810,7 +2250,7 @@ class _InfoRow extends StatelessWidget {
       onTap: copyable
           ? () {
               Clipboard.setData(ClipboardData(text: value));
-              showColibriToast('已复制',
+              showColibriToast(LKeys.profileCopied.tr,
                   message: value,
                   backgroundColor: cGreen,
                   colorText: Colors.white,
@@ -1819,7 +2259,7 @@ class _InfoRow extends StatelessWidget {
           : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: _ColibriProfileScreenState._padH, vertical: 9),
+            horizontal: ColibriProfileScreenState._padH, vertical: 9),
         child: Row(
           children: [
             Container(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:untitled/common/api_service/colibri_api.dart';
 import 'package:untitled/common/extensions/font_extension.dart';
 import 'package:untitled/common/managers/app_command_handler.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/utilities/const.dart';
 
 /// 全局维护（应急）模式页（全屏阻断）。
@@ -35,7 +37,7 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
 
   String get _notice => (_message != null && _message!.trim().isNotEmpty)
       ? _message!.trim()
-      : '系统正在维护中，请稍后再试。感谢您的耐心等待。';
+      : LKeys.socialMaintenanceNotice.tr;
 
   /// 预计恢复时间展示文案：ISO8601 → 本地时区 yyyy-MM-dd HH:mm。
   String? get _untilText {
@@ -70,14 +72,15 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
         setState(() {
           _message = e.message;
           _until = e.data?['until']?.toString();
-          _status = '维护仍在进行中，请稍后再试';
+          _status = LKeys.socialMaintenanceStillOngoing.tr;
         });
       } else {
-        setState(() => _status = '检查失败（HTTP ${e.statusCode ?? '-'}），请稍后重试');
+        setState(() => _status = LKeys.socialMaintenanceCheckFailed
+            .trParams({'p1': '${e.statusCode ?? '-'}'}));
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _status = '网络异常，请检查网络后重试');
+      setState(() => _status = LKeys.socialNetworkError.tr);
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -126,7 +129,7 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
                     ),
                     const SizedBox(height: 30),
                     Text(
-                      '系统维护中',
+                      LKeys.socialUnderMaintenanceTitle.tr,
                       textAlign: TextAlign.center,
                       style: MyTextStyle.gilroyExtraBold(
                           size: 24, color: Colors.white),
@@ -157,7 +160,8 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
                                 size: 16, color: cPrimary),
                             const SizedBox(width: 6),
                             Text(
-                              '预计恢复：$_untilText',
+                              LKeys.socialEstimatedRestore
+                                  .trParams({'p1': '${_untilText}'}),
                               style: MyTextStyle.gilroyBold(
                                   size: 13, color: Colors.white),
                             ),
@@ -187,7 +191,7 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white),
                               )
-                            : Text('检查恢复状态',
+                            : Text(LKeys.socialCheckRecoveryStatus.tr,
                                 style: MyTextStyle.gilroyBold(
                                     size: 16, color: Colors.white)),
                       ),
@@ -202,7 +206,7 @@ class _ColibriMaintenanceScreenState extends State<ColibriMaintenanceScreen> {
                       const SizedBox(height: 10),
                     ],
                     Text(
-                      '服务恢复后即可正常使用',
+                      LKeys.socialServiceRestoreNote.tr,
                       style: MyTextStyle.gilroyRegular(
                           size: 12, color: cLightText),
                     ),

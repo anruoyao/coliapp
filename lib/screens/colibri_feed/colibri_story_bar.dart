@@ -9,6 +9,7 @@ import 'package:untitled/common/api_service/colibri_api.dart';
 import 'package:untitled/common/managers/session_manager.dart';
 import 'package:untitled/common/managers/upload_limits_service.dart';
 import 'package:untitled/common/widgets/my_cached_image.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/models/colibri_story_models.dart';
 import 'package:untitled/screens/colibri_feed/colibri_story_composer_screen.dart';
 import 'package:untitled/screens/colibri_feed/colibri_story_viewer_screen.dart';
@@ -71,7 +72,7 @@ class _ColibriStoryBarState extends State<ColibriStoryBar> {
     final msg = await UploadLimitsService.shared
         .check(File(file.path).lengthSync(), 'image');
     if (msg != null) {
-      showColibriToast('图片过大',
+      showColibriToast(LKeys.commonImageTooLarge.tr,
           message: msg, backgroundColor: cRed, colorText: Colors.white);
       return;
     }
@@ -80,8 +81,10 @@ class _ColibriStoryBarState extends State<ColibriStoryBar> {
         () => ColibriStoryComposerScreen(imagePath: file.path),
         opaque: false);
     if (published == true) {
-      showColibriToast('已发布',
-          message: '故事发布成功', backgroundColor: cGreen, colorText: Colors.white);
+      showColibriToast(LKeys.feedPublished.tr,
+          message: LKeys.feedStoryPublished.tr,
+          backgroundColor: cGreen,
+          colorText: Colors.white);
       _load();
     }
   }
@@ -114,7 +117,7 @@ class _ColibriStoryBarState extends State<ColibriStoryBar> {
         children: [
           // 我的：发布入口（头像 + 绿色加号徽章）
           Obx(() => _StoryItem(
-                label: '我的故事',
+                label: LKeys.feedMyStory.tr,
                 avatarUrl: _myAvatar,
                 isAdd: true,
                 onTap: _createStory,

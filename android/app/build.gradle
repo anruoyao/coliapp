@@ -59,8 +59,8 @@ android {
         minSdkVersion 24
         multiDexEnabled true
         targetSdkVersion 36
-        versionCode 32
-        versionName "1.38"
+        versionCode 36
+        versionName "1.42"
     }
 
     buildTypes {

@@ -52,6 +52,13 @@ const germanStrings = {
   LKeys.randoms: 'Zufällig',
   LKeys.chats: 'Chats',
   LKeys.profile: 'Profil',
+  LKeys.profilePinned: 'Im Profil angeheftet',
+  LKeys.pinToProfile: 'Im Profil anheften',
+  LKeys.unpinFromProfile: 'Aus dem Profil lösen',
+  LKeys.profilePostPinned: 'Beitrag im Profil angeheftet',
+  LKeys.profilePostUnpinned: 'Beitrag aus dem Profil gelöst',
+  LKeys.profilePostPinFailed:
+      'Profil-Anheftung konnte nicht aktualisiert werden',
   LKeys.retry: 'Erneut versuchen',
   LKeys.profileLoadFailed:
       'Profil konnte nicht geladen werden. Bitte erneut versuchen',
@@ -303,6 +310,7 @@ const germanStrings = {
   LKeys.pleaseConfigureSubscription:
       'Stellen Sie sicher, dass Sie Käufe konfigurieren, bevor Sie versuchen, die Standardinstanz abzurufen. Weitere Informationen hier',
   LKeys.audio: 'Audio',
+  LKeys.audioProcessing: 'Audio wird verarbeitet',
   LKeys.spaces: 'Bereiche',
   LKeys.room: 'Raum',
   LKeys.messages: 'Nachrichten',

@@ -105,13 +105,9 @@ class ReelInfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // When sitting over the floating Liquid Glass tab bar, lift the action row
-    // above the bar; otherwise keep the original 20px bottom spacing. The extra
-    // 15px (description font size) gives breathing room between the row and the bar.
+    // Lift the action row above the floating tab bar when it is overlaid.
     final double bottomSpacing = overlayTabBar
-        ? MediaQuery.of(context).padding.bottom +
-            kLiquidNavBarReservedHeight +
-            15
+        ? MediaQuery.of(context).padding.bottom + kBottomNavReservedHeight + 15
         : 20.0;
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,

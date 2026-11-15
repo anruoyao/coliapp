@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:untitled/common/api_service/colibri_version_service.dart';
 import 'package:untitled/common/widgets/colibri_bookmark_toast.dart';
+import 'package:untitled/localization/languages.dart';
 import 'package:untitled/screens/update_screen/app_update_dialog.dart';
 import 'package:untitled/screens/update_screen/forced_update_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -70,19 +72,19 @@ class VersionCheckManager {
       _sessionPrompted = true;
 
       final context = Get.context;
-      if (context == null) return;
+      if (context == null || !context.mounted) return;
 
-      await showDialog<void>(
+      await showCupertinoDialog<void>(
         context: context,
         barrierDismissible: false,
         useRootNavigator: true,
         barrierColor: Colors.black.withValues(alpha: 0.55),
-        builder: (_) => AppUpdateDialog(
+        builder: (dialogContext) => AppUpdateDialog(
           version: latest,
-          onLater: () => Get.back(),
+          onLater: () => Navigator.of(dialogContext).pop(),
           onIgnore: () {
             _storage.write(_kIgnoredKey, latest.code);
-            Get.back();
+            Navigator.of(dialogContext).pop();
           },
           onUpdate: () => _launchDownload(latest),
         ),
@@ -96,13 +98,15 @@ class VersionCheckManager {
   Future<void> _launchDownload(ColibriVersionInfo version) async {
     final url = version.downloadUrl.trim();
     if (url.isEmpty) {
-      showColibriToast('更新失败', message: '当前版本缺少下载链接，请稍后再试');
+      showColibriToast(LKeys.apiUpdateFailed.tr,
+          message: LKeys.apiDownloadLinkMissing.tr);
       return;
     }
     final uri = Uri.parse(url);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened) {
-      showColibriToast('更新失败', message: '无法打开下载链接，请手动访问');
+      showColibriToast(LKeys.apiUpdateFailed.tr,
+          message: LKeys.apiDownloadLinkOpenFailed.tr);
     }
   }
 }
