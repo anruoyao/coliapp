@@ -1050,17 +1050,16 @@ class _MediaGridState extends State<_MediaGrid> {
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 6.0;
-        final tileWidth = widget.images.length > 2
-            ? (constraints.maxWidth - spacing * 2) / 2.25
-            : (constraints.maxWidth - spacing) / 2;
-        final rowHeight = widget.images
-            .map((image) {
-              final aspect = _aspects[image.sourceUrl];
-              return aspect == null || aspect <= 0
-                  ? tileWidth
-                  : tileWidth / aspect;
-            })
-            .reduce((a, b) => a < b ? a : b);
+        final aspects = widget.images.map((image) {
+          final aspect = _aspects[image.sourceUrl];
+          return aspect == null || aspect <= 0 ? 1.0 : aspect;
+        }).toList();
+        final previewAspectTotal = aspects[0] +
+            aspects[1] +
+            (aspects.length > 2 ? aspects[2] * 0.25 : 0);
+        final previewGaps = spacing * (aspects.length > 2 ? 2 : 1);
+        final rowHeight =
+            (constraints.maxWidth - previewGaps) / previewAspectTotal;
         final list = SizedBox(
           height: rowHeight,
           child: NotificationListener<ScrollMetricsNotification>(
@@ -1077,8 +1076,9 @@ class _MediaGridState extends State<_MediaGrid> {
               separatorBuilder: (_, __) => const SizedBox(width: spacing),
               itemBuilder: (context, index) {
                 final image = widget.images[index];
+                final imageWidth = rowHeight * aspects[index];
                 return SizedBox(
-                  width: tileWidth,
+                  width: imageWidth,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => Get.to(
@@ -1090,18 +1090,13 @@ class _MediaGridState extends State<_MediaGrid> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        alignment: Alignment.center,
-                        color: cLightBg,
-                        child: MyCachedImage(
-                          imageUrl: image.sourceUrl,
-                          width: tileWidth,
-                          height: rowHeight,
-                          cornerRadius: 10,
-                          resizeToDisplayBounds:
-                              widget.resizeToDisplayBounds,
-                          fit: BoxFit.contain,
-                        ),
+                      child: MyCachedImage(
+                        imageUrl: image.sourceUrl,
+                        width: imageWidth,
+                        height: rowHeight,
+                        cornerRadius: 10,
+                        resizeToDisplayBounds: widget.resizeToDisplayBounds,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
