@@ -37,6 +37,7 @@ class ColibriPostCard extends StatefulWidget {
   final VoidCallback? onChanged; // 帖子状态变化（删除等）后交由父级刷新
   final ValueChanged<bool>? onBookmarked; // 收藏状态切换成功后回调（true=已收藏）
   final bool resizeMediaToDisplayBounds;
+  final bool fixedSingleImageHeight;
   @visibleForTesting
   final Future<TranslationResult> Function(int postId, String target)?
       translatePost;
@@ -48,6 +49,7 @@ class ColibriPostCard extends StatefulWidget {
       this.onChanged,
       this.onBookmarked,
       this.resizeMediaToDisplayBounds = false,
+      this.fixedSingleImageHeight = false,
       this.translatePost});
 
   @override
@@ -458,6 +460,7 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
               child: _AdaptivePostImage(
                 url: image[0].sourceUrl,
                 resizeToDisplayBounds: widget.resizeMediaToDisplayBounds,
+                fixedHeight: widget.fixedSingleImageHeight,
               ),
             )
           else
@@ -690,10 +693,12 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
 class _AdaptivePostImage extends StatefulWidget {
   final String url;
   final bool resizeToDisplayBounds;
+  final bool fixedHeight;
 
   const _AdaptivePostImage({
     required this.url,
     this.resizeToDisplayBounds = false,
+    this.fixedHeight = false,
   });
 
   @override
@@ -708,16 +713,18 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _resolveAspect();
+    if (!widget.fixedHeight) _resolveAspect();
   }
 
   @override
   void didUpdateWidget(covariant _AdaptivePostImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url ||
-        oldWidget.resizeToDisplayBounds != widget.resizeToDisplayBounds) {
+        oldWidget.resizeToDisplayBounds != widget.resizeToDisplayBounds ||
+        oldWidget.fixedHeight != widget.fixedHeight) {
+      _removeImageListener();
       _aspect = null;
-      _resolveAspect();
+      if (!widget.fixedHeight) _resolveAspect();
     }
   }
 
@@ -768,6 +775,23 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.fixedHeight) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _open,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: MyCachedImage(
+            imageUrl: widget.url,
+            width: double.infinity,
+            height: 220,
+            cornerRadius: 12,
+            resizeToDisplayBounds: widget.resizeToDisplayBounds,
+          ),
+        ),
+      );
+    }
+
     final aspect = _aspect;
     // 宽高比未解析（图片加载中）：保持原 220 高度占位
     if (aspect == null || aspect <= 0) {
