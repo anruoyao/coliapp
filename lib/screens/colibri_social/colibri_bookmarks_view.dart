@@ -98,7 +98,6 @@ class _ColibriBookmarksViewState extends State<ColibriBookmarksView> {
               return ColibriPostCard(
                 key: ValueKey('bookmark_${p.id}'),
                 post: p,
-                fixedSingleImageHeight: true,
                 // 取消收藏后卡片由 store 自动从列表移除，这里无需手动处理
                 onTap: () => Get.to(() => ColibriPostDetailScreen(post: p),
                     opaque: false),

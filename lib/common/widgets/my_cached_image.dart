@@ -13,6 +13,7 @@ class MyCachedImage extends StatelessWidget {
   final double? height;
   final double cornerRadius;
   final bool resizeToDisplayBounds;
+  final BoxFit fit;
 
   const MyCachedImage({
     super.key,
@@ -21,6 +22,7 @@ class MyCachedImage extends StatelessWidget {
     this.height,
     this.cornerRadius = 0,
     this.resizeToDisplayBounds = false,
+    this.fit = BoxFit.cover,
   });
 
   @override
@@ -61,7 +63,7 @@ class MyCachedImage extends StatelessWidget {
         width: width,
         height: height,
         memCacheWidth: memCacheWidth,
-        fit: BoxFit.cover,
+        fit: fit,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
         errorWidget: (context, url, error) => placeHolder(),

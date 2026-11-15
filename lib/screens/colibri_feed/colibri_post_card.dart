@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -37,7 +38,6 @@ class ColibriPostCard extends StatefulWidget {
   final VoidCallback? onChanged; // 帖子状态变化（删除等）后交由父级刷新
   final ValueChanged<bool>? onBookmarked; // 收藏状态切换成功后回调（true=已收藏）
   final bool resizeMediaToDisplayBounds;
-  final bool fixedSingleImageHeight;
   @visibleForTesting
   final Future<TranslationResult> Function(int postId, String target)?
       translatePost;
@@ -49,7 +49,6 @@ class ColibriPostCard extends StatefulWidget {
       this.onChanged,
       this.onBookmarked,
       this.resizeMediaToDisplayBounds = false,
-      this.fixedSingleImageHeight = false,
       this.translatePost});
 
   @override
@@ -460,7 +459,6 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
               child: _AdaptivePostImage(
                 url: image[0].sourceUrl,
                 resizeToDisplayBounds: widget.resizeMediaToDisplayBounds,
-                fixedHeight: widget.fixedSingleImageHeight,
               ),
             )
           else
@@ -689,16 +687,25 @@ class _ColibriPostCardState extends State<ColibriPostCard> {
 
 /// 单图自适应展示（对齐网页端：单图按自然比例全高显示）。
 /// 图片解析出宽高比后：高度 = 可用宽度 / 比例；超过屏高 62% 时封顶裁剪（cover 取中间）
-/// 并显示「查看长图」角标，防止超长图刷屏。
+/// 并显示「查看长图」角标。按 URL 缓存比例，让列表回收后的帖子直接使用已解析尺寸。
+final Map<String, double> _postImageAspectCache = <String, double>{};
+
+void _rememberPostImageAspect(String url, double aspect) {
+  if (url.isEmpty || !aspect.isFinite || aspect <= 0) return;
+  _postImageAspectCache.remove(url);
+  _postImageAspectCache[url] = aspect;
+  if (_postImageAspectCache.length > 512) {
+    _postImageAspectCache.remove(_postImageAspectCache.keys.first);
+  }
+}
+
 class _AdaptivePostImage extends StatefulWidget {
   final String url;
   final bool resizeToDisplayBounds;
-  final bool fixedHeight;
 
   const _AdaptivePostImage({
     required this.url,
     this.resizeToDisplayBounds = false,
-    this.fixedHeight = false,
   });
 
   @override
@@ -711,6 +718,12 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   ImageStreamListener? _listener;
 
   @override
+  void initState() {
+    super.initState();
+    _aspect = _postImageAspectCache[widget.url];
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _resolveAspect();
@@ -720,10 +733,9 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   void didUpdateWidget(covariant _AdaptivePostImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url ||
-        oldWidget.resizeToDisplayBounds != widget.resizeToDisplayBounds ||
-        oldWidget.fixedHeight != widget.fixedHeight) {
+        oldWidget.resizeToDisplayBounds != widget.resizeToDisplayBounds) {
       _removeImageListener();
-      _aspect = null;
+      _aspect = _postImageAspectCache[widget.url];
       _resolveAspect();
     }
   }
@@ -760,7 +772,9 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
       final w = info.image.width;
       final h = info.image.height;
       if (w > 0 && h > 0 && mounted) {
-        setState(() => _aspect = w / h);
+        final aspect = w / h;
+        _rememberPostImageAspect(widget.url, aspect);
+        if (_aspect != aspect) setState(() => _aspect = aspect);
       }
       stream.removeListener(listener);
       if (identical(_stream, stream)) {
@@ -775,32 +789,6 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.fixedHeight) {
-      final aspect = _aspect;
-      final width = MediaQuery.sizeOf(context).width - 32;
-      final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
-      final capped = aspect != null && aspect > 0 && width / aspect > maxHeight;
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _open,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: MyCachedImage(
-                imageUrl: widget.url,
-                width: double.infinity,
-                height: 220,
-                cornerRadius: 12,
-                resizeToDisplayBounds: widget.resizeToDisplayBounds,
-              ),
-            ),
-            if (capped) _buildLongImageHint(),
-          ],
-        ),
-      );
-    }
-
     final aspect = _aspect;
     // 宽高比未解析（图片加载中）：保持原 220 高度占位
     if (aspect == null || aspect <= 0) {
@@ -884,7 +872,7 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
 }
 
 /// 媒体多图横向浏览；点击图片进入多图查看器并定位到该图。
-class _MediaGrid extends StatelessWidget {
+class _MediaGrid extends StatefulWidget {
   final List<ColibriPostMedia> images;
   final int postId;
   final bool resizeToDisplayBounds;
@@ -896,63 +884,238 @@ class _MediaGrid extends StatelessWidget {
   });
 
   @override
+  State<_MediaGrid> createState() => _MediaGridState();
+}
+
+class _MediaGridState extends State<_MediaGrid> {
+  final ScrollController _scrollController = ScrollController();
+  final Map<String, double> _aspects = <String, double>{};
+  final Map<String, ImageStream> _streams = <String, ImageStream>{};
+  final Map<String, ImageStreamListener> _listeners =
+      <String, ImageStreamListener>{};
+  bool _fadeLeft = false;
+  bool _fadeRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateFadeEdges);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveImageAspects();
+    _scheduleFadeUpdate();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MediaGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameImageUrls(oldWidget.images, widget.images)) {
+      _removeImageListeners();
+      _aspects.clear();
+      _resolveImageAspects();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeImageListeners();
+    _scrollController
+      ..removeListener(_updateFadeEdges)
+      ..dispose();
+    super.dispose();
+  }
+
+  bool _sameImageUrls(
+      List<ColibriPostMedia> first, List<ColibriPostMedia> second) {
+    if (first.length != second.length) return false;
+    for (var i = 0; i < first.length; i++) {
+      if (first[i].sourceUrl != second[i].sourceUrl) return false;
+    }
+    return true;
+  }
+
+  void _removeImageListeners() {
+    for (final entry in _listeners.entries) {
+      _streams[entry.key]?.removeListener(entry.value);
+    }
+    _listeners.clear();
+    _streams.clear();
+  }
+
+  void _resolveImageAspects() {
+    for (final image in widget.images) {
+      final url = image.sourceUrl;
+      final cachedAspect = _postImageAspectCache[url];
+      if (cachedAspect != null) {
+        _aspects[url] = cachedAspect;
+        continue;
+      }
+      if (_listeners.containsKey(url)) continue;
+      final tileWidth = (MediaQuery.sizeOf(context).width - 32) / 2.25;
+      final cacheWidth = (tileWidth * MediaQuery.devicePixelRatioOf(context))
+          .ceil()
+          .clamp(1, 4096)
+          .toInt();
+      final provider = ResizeImage.resizeIfNeeded(
+        cacheWidth,
+        null,
+        CachedNetworkImageProvider(url, cacheKey: url),
+      );
+      final stream = provider.resolve(createLocalImageConfiguration(context));
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener((info, _) {
+        final width = info.image.width;
+        final height = info.image.height;
+        if (width > 0 && height > 0) {
+          final aspect = width / height;
+          _rememberPostImageAspect(url, aspect);
+          if (mounted && _aspects[url] != aspect) {
+            setState(() => _aspects[url] = aspect);
+          }
+        }
+        stream.removeListener(listener);
+        if (identical(_streams[url], stream)) {
+          _streams.remove(url);
+          _listeners.remove(url);
+        }
+      });
+      _streams[url] = stream;
+      _listeners[url] = listener;
+      stream.addListener(listener);
+    }
+  }
+
+  void _scheduleFadeUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateFadeEdges();
+    });
+  }
+
+  void _updateFadeEdges() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) return;
+    final fadeLeft = position.pixels > position.minScrollExtent + 0.5;
+    final fadeRight = position.pixels < position.maxScrollExtent - 0.5;
+    if (fadeLeft != _fadeLeft || fadeRight != _fadeRight) {
+      setState(() {
+        _fadeLeft = fadeLeft;
+        _fadeRight = fadeRight;
+      });
+    }
+  }
+
+  Shader _edgeFadeShader(Rect bounds) {
+    const edgeFadeWidth = 18.0;
+    final edge = min(edgeFadeWidth / bounds.width, 0.45);
+    if (_fadeLeft && _fadeRight) {
+      return LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        stops: [0, edge, 1 - edge, 1],
+        colors: const [
+          Colors.transparent,
+          Colors.black,
+          Colors.black,
+          Colors.transparent,
+        ],
+      ).createShader(bounds);
+    }
+    if (_fadeLeft) {
+      return LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        stops: [0, edge],
+        colors: const [Colors.transparent, Colors.black],
+      ).createShader(bounds);
+    }
+    if (_fadeRight) {
+      return LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        stops: [1 - edge, 1],
+        colors: const [Colors.black, Colors.transparent],
+      ).createShader(bounds);
+    }
+    return const LinearGradient(colors: [Colors.black, Colors.black])
+        .createShader(bounds);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final urls = images.map((m) => m.sourceUrl).toList();
+    final urls = widget.images.map((m) => m.sourceUrl).toList();
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 6.0;
-        final tileWidth = images.length > 2
+        final tileWidth = widget.images.length > 2
             ? (constraints.maxWidth - spacing * 2) / 2.25
             : (constraints.maxWidth - spacing) / 2;
+        final rowHeight = widget.images
+            .map((image) {
+              final aspect = _aspects[image.sourceUrl];
+              return aspect == null || aspect <= 0
+                  ? tileWidth
+                  : tileWidth / aspect;
+            })
+            .reduce((a, b) => a < b ? a : b);
         final list = SizedBox(
-          height: tileWidth,
-          child: ListView.separated(
-            key: PageStorageKey<String>('post_media_$postId'),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: images.length,
-            separatorBuilder: (_, __) => const SizedBox(width: spacing),
-            itemBuilder: (context, index) {
-              final img = images[index];
-              return SizedBox(
-                width: tileWidth,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Get.to(
-                    () => ColibriPhotoViewerScreen(
-                      images: urls,
-                      initialIndex: index,
-                    ),
-                    opaque: false,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: MyCachedImage(
-                      imageUrl: img.sourceUrl,
-                      width: tileWidth,
-                      height: tileWidth,
-                      cornerRadius: 10,
-                      resizeToDisplayBounds: resizeToDisplayBounds,
-                    ),
-                  ),
-                ),
-              );
+          height: rowHeight,
+          child: NotificationListener<ScrollMetricsNotification>(
+            onNotification: (_) {
+              _scheduleFadeUpdate();
+              return false;
             },
+            child: ListView.separated(
+              key: PageStorageKey<String>('post_media_${widget.postId}'),
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: widget.images.length,
+              separatorBuilder: (_, __) => const SizedBox(width: spacing),
+              itemBuilder: (context, index) {
+                final image = widget.images[index];
+                return SizedBox(
+                  width: tileWidth,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Get.to(
+                      () => ColibriPhotoViewerScreen(
+                        images: urls,
+                        initialIndex: index,
+                      ),
+                      opaque: false,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        alignment: Alignment.center,
+                        color: cLightBg,
+                        child: MyCachedImage(
+                          imageUrl: image.sourceUrl,
+                          width: tileWidth,
+                          height: rowHeight,
+                          cornerRadius: 10,
+                          resizeToDisplayBounds:
+                              widget.resizeToDisplayBounds,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         );
         return ClipRect(
-          child: images.length > 2
-              ? ShaderMask(
-                  blendMode: BlendMode.dstIn,
-                  shaderCallback: (bounds) => const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    stops: [0, 0.96, 1],
-                    colors: [Colors.black, Colors.black, Colors.transparent],
-                  ).createShader(bounds),
-                  child: list,
-                )
-              : list,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: _edgeFadeShader,
+            child: list,
+          ),
         );
       },
     );
