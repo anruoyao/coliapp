@@ -713,7 +713,7 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!widget.fixedHeight) _resolveAspect();
+    _resolveAspect();
   }
 
   @override
@@ -724,7 +724,7 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
         oldWidget.fixedHeight != widget.fixedHeight) {
       _removeImageListener();
       _aspect = null;
-      if (!widget.fixedHeight) _resolveAspect();
+      _resolveAspect();
     }
   }
 
@@ -776,18 +776,27 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   @override
   Widget build(BuildContext context) {
     if (widget.fixedHeight) {
+      final aspect = _aspect;
+      final width = MediaQuery.sizeOf(context).width - 32;
+      final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
+      final capped = aspect != null && aspect > 0 && width / aspect > maxHeight;
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _open,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: MyCachedImage(
-            imageUrl: widget.url,
-            width: double.infinity,
-            height: 220,
-            cornerRadius: 12,
-            resizeToDisplayBounds: widget.resizeToDisplayBounds,
-          ),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: MyCachedImage(
+                imageUrl: widget.url,
+                width: double.infinity,
+                height: 220,
+                cornerRadius: 12,
+                resizeToDisplayBounds: widget.resizeToDisplayBounds,
+              ),
+            ),
+            if (capped) _buildLongImageHint(),
+          ],
         ),
       );
     }
@@ -836,33 +845,35 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
                   resizeToDisplayBounds: widget.resizeToDisplayBounds),
             ),
           ),
-          if (capped)
-            Positioned(
-              right: 10,
-              bottom: 10,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.open_in_full_rounded,
-                        color: Colors.white, size: 13),
-                    SizedBox(width: 4),
-                    Text('查看长图',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
+          if (capped) _buildLongImageHint(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLongImageHint() {
+    return Positioned(
+      right: 10,
+      bottom: 10,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.open_in_full_rounded,
+                color: Colors.white, size: 13),
+            SizedBox(width: 4),
+            Text('查看长图',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
@@ -872,7 +883,7 @@ class _AdaptivePostImageState extends State<_AdaptivePostImage> {
   }
 }
 
-/// 媒体多图网格（2 列，点击任意图进入多图查看器并定位到该图）。
+/// 媒体多图横向浏览；点击图片进入多图查看器并定位到该图。
 class _MediaGrid extends StatelessWidget {
   final List<ColibriPostMedia> images;
   final int postId;
@@ -887,35 +898,61 @@ class _MediaGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final urls = images.map((m) => m.sourceUrl).toList();
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 1, // 正方形格子，对齐主流社交布局
-      ),
-      itemCount: images.length,
-      itemBuilder: (context, index) {
-        final img = images[index];
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => Get.to(
-              () => ColibriPhotoViewerScreen(
-                    images: urls,
-                    initialIndex: index,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 6.0;
+        final tileWidth = images.length > 2
+            ? (constraints.maxWidth - spacing * 2) / 2.25
+            : (constraints.maxWidth - spacing) / 2;
+        final list = SizedBox(
+          height: tileWidth,
+          child: ListView.separated(
+            key: PageStorageKey<String>('post_media_$postId'),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: images.length,
+            separatorBuilder: (_, __) => const SizedBox(width: spacing),
+            itemBuilder: (context, index) {
+              final img = images[index];
+              return SizedBox(
+                width: tileWidth,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Get.to(
+                    () => ColibriPhotoViewerScreen(
+                      images: urls,
+                      initialIndex: index,
+                    ),
+                    opaque: false,
                   ),
-              opaque: false),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: MyCachedImage(
-                imageUrl: img.sourceUrl,
-                width: double.infinity,
-                height: double.infinity,
-                cornerRadius: 10,
-                resizeToDisplayBounds: resizeToDisplayBounds),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: MyCachedImage(
+                      imageUrl: img.sourceUrl,
+                      width: tileWidth,
+                      height: tileWidth,
+                      cornerRadius: 10,
+                      resizeToDisplayBounds: resizeToDisplayBounds,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
+        );
+        return ClipRect(
+          child: images.length > 2
+              ? ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (bounds) => const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    stops: [0, 0.96, 1],
+                    colors: [Colors.black, Colors.black, Colors.transparent],
+                  ).createShader(bounds),
+                  child: list,
+                )
+              : list,
         );
       },
     );
